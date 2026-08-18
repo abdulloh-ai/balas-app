@@ -1,0 +1,186 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// 1. PlatformOwner (Super Admin SaaS)
+// -------------------------------------------------------------
+model PlatformOwner {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenants Tenant[]
+}
+
+// -------------------------------------------------------------
+// 2. Tenant (UMKM Berlangganan)
+// -------------------------------------------------------------
+model Tenant {
+  id                 String   @id @default(cuid())
+  platformOwnerId    String
+  name               String
+  description        String?
+  operatingHours     String?
+  policies           String?
+  subscriptionStatus String   @default("ACTIVE") // ACTIVE, INACTIVE, TRIAL
+  subscriptionPlan   String   @default("STARTER") // STARTER, PRO, ENTERPRISE
+  paymentStatus      String   @default("SUDAH_BAYAR") // SUDAH_BAYAR, BELUM_BAYAR
+  lastPaidAt         DateTime @default(now())
+  startDate          DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  platformOwner  PlatformOwner   @relation(fields: [platformOwnerId], references: [id], onDelete: Cascade)
+  businessOwners BusinessOwner[]
+  products       Product[]
+  orders         Order[]
+  conversations  Conversation[]
+  escalations    Escalation[]
+
+  @@index([platformOwnerId])
+}
+
+// -------------------------------------------------------------
+// 3. BusinessOwner (Akun Pemilik UMKM Dashboard)
+// -------------------------------------------------------------
+model BusinessOwner {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("OWNER") // OWNER, ADMIN
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+// -------------------------------------------------------------
+// 4. Product (Barang/Jasa Tenant)
+// -------------------------------------------------------------
+model Product {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  price       Float
+  stock       Int      @default(0)
+  description String?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([tenantId])
+}
+
+// -------------------------------------------------------------
+// 5. Order & OrderItem (Pesanan Pelanggan)
+// -------------------------------------------------------------
+model Order {
+  id            String      @id @default(cuid())
+  tenantId      String
+  customerName  String?
+  customerPhone String?
+  totalAmount   Float       @default(0)
+  status        OrderStatus @default(MENUNGGU_PEMBAYARAN)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  OrderItem[]
+
+  @@index([tenantId])
+}
+
+enum OrderStatus {
+  MENUNGGU_PEMBAYARAN
+  LUNAS
+  DIBATALKAN
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  productId   String?
+  productName String
+  price       Float
+  quantity    Int     @default(1)
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// -------------------------------------------------------------
+// 6. Conversation (Riwayat Chat WhatsApp Pelanggan per Tenant)
+// -------------------------------------------------------------
+model Conversation {
+  id            String       @id @default(cuid())
+  tenantId      String
+  customerPhone String
+  sender        SenderRole   @default(PELANGGAN)
+  message       String
+  createdAt     DateTime     @default(now())
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  escalations Escalation[]
+
+  @@index([tenantId])
+  @@index([customerPhone])
+}
+
+enum SenderRole {
+  PELANGGAN
+  AI
+  ADMIN
+}
+
+// -------------------------------------------------------------
+// 7. Escalation (Catatan Alih Percakapan ke Pemilik)
+// -------------------------------------------------------------
+model Escalation {
+  id             String           @id @default(cuid())
+  tenantId       String
+  conversationId String?
+  reason         EscalationReason @default(LAINNYA)
+  summary        String
+  status         EscalationStatus @default(BELUM_SELESAI)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([conversationId])
+}
+
+enum EscalationReason {
+  PEMBAYARAN
+  KOMPLAIN
+  NEGO_HARGA
+  PERTANYAAN_DILUAR_DATA
+  LAINNYA
+}
+
+enum EscalationStatus {
+  BELUM_SELESAI
+  SELESAI
+}
