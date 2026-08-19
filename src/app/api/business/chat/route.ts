@@ -26,7 +26,7 @@ export async function GET() {
 // -------------------------------------------------------------
 const catatPesananTool = {
   name: "catat_pesanan",
-  description: "WAJIB DIPANGGIL KETIKA PELANGGAN MENYATAKAN INGIN MEMBELI/MEMESAN PRODUK (misal: 'pesan 2 pack', 'mau beli 1 jar', 'order frozen beef'). LANGSUNG PANGGIL TOOL INI SAAT ITU JUGA TANPA BERTANYA LAGI!",
+  description: "WAJIB DIPANGGIL KETIKA PELANGGAN MENYATAKAN INGIN MEMBELI/MEMESAN PRODUK (misal: 'pesan 2 pack', 'mau beli 1 jar', 'order frozen beef', 'ambil 2 ya'). LANGSUNG PANGGIL TOOL INI SAAT ITU JUGA TANPA BERTANYA LAGI!",
   parameters: {
     type: "OBJECT",
     properties: {
@@ -59,7 +59,7 @@ const catatPesananTool = {
 
 const alihkanKeAdminTool = {
   name: "alihkan_ke_admin",
-  description: "Dipanggil saat pelanggan mengirim bukti transfer/pembayaran, mengajukan komplain, nego harga khusus, atau bertanya di luar data katalog/toko.",
+  description: "Dipanggil saat pelanggan mengirim bukti transfer/pembayaran, mengajukan komplain, nego harga khusus, atau bertanya hal rumit di luar data toko.",
   parameters: {
     type: "OBJECT",
     properties: {
@@ -113,27 +113,50 @@ export async function POST(request: Request) {
       },
     });
 
+    // Ambil riwayat percakapan terakhir untuk memberi konteks yang alami pada AI (Conversational Memory)
+    const recentHistory = await prisma.conversation.findMany({
+      where: { tenantId: session.tenantId, customerPhone },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+    });
+    recentHistory.reverse();
+
+    const historyFormatted = recentHistory
+      .map((c) => `${c.sender === "PELANGGAN" ? "Pembeli" : "Admin Toko"}: "${c.message}"`)
+      .join("\n");
+
     const productCatalogText =
       tenant.products.length > 0
         ? tenant.products
             .map(
               (p) =>
-                `- ${p.name}: Rp ${p.price.toLocaleString("id-ID")}, Stok: ${p.stock} pcs ${
-                  p.description ? `(${p.description})` : ""
-                }`
+                `• ${p.name} (Harga: Rp ${p.price.toLocaleString("id-ID")}, Stok ready: ${p.stock} pcs${
+                  p.description ? `, Deskripsi: ${p.description}` : ""
+                })`
             )
             .join("\n")
         : "(Belum ada produk di katalog)";
 
-    const systemPrompt = `Kamu adalah admin/kasir toko WA asli dari "${tenant.name}". Gaya bahasamu ramah, santai, dan fleksibel khas admin toko Indonesia (gunakan kata "Kak", emoji ramah seperti 😊).
+    const systemPrompt = `Kamu adalah seorang admin WhatsApp asli yang sangat ramah, hangat, pintar, dan fleksibel bernama Admin "${tenant.name}".
 
-Katalog Produk & Stok Toko Saat Ini:
+PERILAKU & GAYA BAHASA (WAJIB DIPATUHI AGAR ALAMI SEPERTI MANUSIA):
+1. Berbicaralah luwes dan santai seperti manusia asli khas admin olshop Indonesia. Pakai sapaan "Kak" atau "Kakak", emoji ramah secukupnya (😊, 🙏, ✨), dan kalimat yang mengalir alami.
+2. JANGAN PERNAH terdengar seperti template robot atau rekaman mesin! Berikan rekomendasi produk jika pembeli bingung atau bertanya saran.
+3. Jawab pertanyaan pembeli secara cerdas, ramah, dan membantu berdasarkan data toko di bawah ini.
+
+DATA KATALOG & STOK TOKO SAAT INI:
 ${productCatalogText}
 
-Instruksi Penting:
-1. JIKA PELANGGAN MENANYAKAN PRODUK APA SAJA YANG DIJUAL / DAFTAR HARGA / MENU KATALOG (misal: "jual apa aja?", "ada produk apa aja?", "daftar harga", "katalog"), SEBUTKAN SELURUH DAFTAR PRODUK KAMI BESERTA HARGA DAN STOKNYA SECARA LENGKAP & RAMAH!
-2. JIKA PELANGGAN MENYEBUTKAN INGIN MEMBELI/ORDER (misal: "pesan 2 pack", "beli frozen beef", "mau order"), KAMU HARUS LANGSUNG MEMANGGIL TOOL catat_pesanan SAAT INI JUGA! JANGAN BERTANYA LAGI!
-3. JIKA PELANGGAN MENYEBUTKAN BUKTI TRANSFER/BAYAR, PANGGIL TOOL alihkan_ke_admin.`;
+DATA OPERASIONAL TOKO:
+- Jam Operasional: ${tenant.operatingHours || "Setiap hari (08.00 - 21.00 WIB)"}
+- Kebijakan/Info: ${tenant.policies || "Pengiriman aman dan cepat"}
+
+RIWAYAT CHAT SEBELUMNYA:
+${historyFormatted}
+
+ATURAN EKSEKUSI TOOL KHUSUS:
+- Jika pembeli menyatakan ingin ORDER/BELI/PESAN (misal: "pesan 2 pack", "mau beli teriyaki", "ambil 1 ya"), KAMU HARUS LANGSUNG MEMANGGIL TOOL catat_pesanan SAAT INI JUGA!
+- Jika pembeli mengirim BUKTI TRANSFER/BAYAR atau KOMPLAIN, PANGGIL TOOL alihkan_ke_admin.`;
 
     let aiReplyText = "";
     let toolExecutionLog: string | null = null;
@@ -150,11 +173,11 @@ Instruksi Penting:
             contents: [
               {
                 role: "user",
-                parts: [{ text: `${systemPrompt}\n\nPesan Pelanggan WA: "${message.trim()}"` }],
+                parts: [{ text: `${systemPrompt}\n\nPesan Terbaru Pembeli: "${message.trim()}"` }],
               },
             ],
             tools: [{ functionDeclarations: [catatPesananTool, alihkanKeAdminTool] }],
-            generationConfig: { temperature: 0.3, maxOutputTokens: 400 },
+            generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
           }),
         });
 
@@ -210,7 +233,7 @@ Instruksi Penting:
 }
 
 // -------------------------------------------------------------
-// Helper Handlers untuk Tool Execution & Fallback Logic Cerdas
+// Helper Handlers untuk Tool Execution & Fallback Logic Alami
 // -------------------------------------------------------------
 async function handleCatatPesananTool(
   tenantId: string,
@@ -221,7 +244,7 @@ async function handleCatatPesananTool(
   const items = args.items || [];
   if (items.length === 0) {
     return {
-      message: "Siap Kak! Boleh tahu mau pesan produk apa dan berapa unit?",
+      message: "Boleh banget Kak! Mau pesan produk yang mana dan berapa pcs?",
       log: "Tool catat_pesanan dipanggil tanpa item.",
     };
   }
@@ -241,7 +264,7 @@ async function handleCatatPesananTool(
 
     if (!targetProduct) {
       return {
-        message: `Maaf Kak, produk tersebut belum tersedia di toko kami.`,
+        message: `Maaf ya Kak, produk tersebut sepertinya belum tersedia di katalog toko kami saat ini 🙏.`,
         log: `Tool catat_pesanan gagal: produk tidak ditemukan.`,
       };
     }
@@ -250,7 +273,7 @@ async function handleCatatPesananTool(
 
     if (targetProduct.stock < qty) {
       return {
-        message: `Maaf banget Kak, stok untuk "${targetProduct.name}" tinggal sisa ${targetProduct.stock} pcs. Pesanan ${qty} pcs belum bisa diproses.`,
+        message: `Waduh maaf banget ya Kak, stok untuk "${targetProduct.name}" tinggal sisa ${targetProduct.stock} pcs lagi nih. Pesanan ${qty} pcs belum bisa kami proses penuh 🙏.`,
         log: `Tool catat_pesanan gagal: stok ${targetProduct.name} kurang (${targetProduct.stock} < ${qty}).`,
       };
     }
@@ -289,7 +312,7 @@ async function handleCatatPesananTool(
 
   const detailText = orderItemsToCreate.map((i) => `${i.productName} (${i.quantity}x)`).join(", ");
   return {
-    message: `Siap Kak! Pesanan ${detailText} dengan total Rp ${totalAmount.toLocaleString("id-ID")} berhasil dicatat 😊. Silakan lakukan pembayaran agar pesanan bisa diproses ya!`,
+    message: `Siap Kak! Pesanan ${detailText} dengan total Rp ${totalAmount.toLocaleString("id-ID")} sudah langsung aku catatkan di sistem ya 😊.\n\nSilakan diproses pembayarannya Kak, nanti kalau sudah transfer tinggal infokan ke aku ya! 🙏`,
     log: `Tool catat_pesanan SUKSES: Order dibuat Rp ${totalAmount} & stok terpotong.`,
   };
 }
@@ -309,7 +332,7 @@ async function handleAlihkanKeAdminTool(tenantId: string, conversationId: string
   });
 
   return {
-    message: `Baik Kak, informasi ini sudah kami teruskan ke pemilik toko untuk diperiksa ya. Mohon tunggu sebentar 😊.`,
+    message: `Baik Kak, informasi ini sudah aku teruskan langsung ke pemilik toko untuk diperiksa ya. Mohon tunggu sebentar ya Kak 😊.`,
     log: `Tool alihkan_ke_admin SUKSES: Record Eskalasi dibuat (Reason: ${reason}).`,
   };
 }
@@ -323,7 +346,7 @@ async function processFallbackLogic(
 ) {
   const query = userQuery.toLowerCase();
 
-  // Pertanyaan Produk yang Dijual & Daftar Harga / Katalog
+  // Pertanyaan Produk / Katalog
   if (
     query.includes("jual apa") ||
     query.includes("produk apa") ||
@@ -334,16 +357,16 @@ async function processFallbackLogic(
     query.includes("list produk")
   ) {
     if (products.length === 0) {
-      return `Katalog produk toko ${tenant.name} sedang disiapkan Kak 😊.`;
+      return `Halo Kak! Katalog produk toko ${tenant.name} sedang kami rapikan nih 😊. Mau cari menu favorit apa Kak?`;
     }
     const productListFormatted = products
       .map(
         (p) =>
-          `• ${p.name} — Rp ${p.price.toLocaleString("id-ID")} (Stok ready: ${p.stock} pcs)`
+          `✨ *${p.name}* — Rp ${p.price.toLocaleString("id-ID")} (Stok ready: ${p.stock} pcs)`
       )
       .join("\n");
 
-    return `Halo Kak! Di toko ${tenant.name} kami menjual:\n\n${productListFormatted}\n\nAda yang mau Kakak pesan? 😊`;
+    return `Halo Kak! Selamat datang di ${tenant.name} 😊. Ini dia menu pilihan favorit kami yang ready saat ini:\n\n${productListFormatted}\n\nAda yang menarik perhatian Kakak buat dipesan hari ini? 🔥`;
   }
 
   // Niat transfer / bayar / bukti
@@ -355,7 +378,7 @@ async function processFallbackLogic(
     return res.message;
   }
 
-  // Deteksi Pesanan Langsung (contoh: "mau 2 pack", "pesan 1", "beli teriyaki")
+  // Deteksi Pesanan Langsung
   const isOrdering = query.includes("pesan") || query.includes("beli") || query.includes("order") || query.includes("mau") || query.includes("ambil");
 
   if (isOrdering && products.length > 0) {
@@ -373,7 +396,9 @@ async function processFallbackLogic(
 
   // Tanya jam buka
   if (query.includes("jam") || query.includes("buka") || query.includes("tutup") || query.includes("operasional")) {
-    return tenant.operatingHours ? `Toko kami buka: ${tenant.operatingHours} ya Kak 😊.` : `Toko ${tenant.name} siap melayani Anda.`;
+    return tenant.operatingHours
+      ? `Toko kami buka ${tenant.operatingHours} ya Kak 😊. Silakan diorder kapan saja!`
+      : `Toko ${tenant.name} selalu siap melayani Kakak! Ada yang bisa dibantu?`;
   }
 
   // Tanya produk spesifik
@@ -382,8 +407,8 @@ async function processFallbackLogic(
   );
 
   if (matchedProduct) {
-    return `${matchedProduct.name} harganya Rp ${matchedProduct.price.toLocaleString("id-ID")}, sisa stok ready ${matchedProduct.stock} pcs Kak 😊.`;
+    return `Untuk *${matchedProduct.name}* harganya Rp ${matchedProduct.price.toLocaleString("id-ID")} Kak 😊. Stoknya masih ready ${matchedProduct.stock} pcs lagi nih. Mau langsung diambil berapa pack Kak?`;
   }
 
-  return `Halo Kak! Ada yang bisa dibantu untuk produk di ${tenant.name}? 😊`;
+  return `Halo Kak! Ada yang bisa aku bantu untuk produk pilihan di ${tenant.name}? Tanyakan saja ya Kak 😊!`;
 }
