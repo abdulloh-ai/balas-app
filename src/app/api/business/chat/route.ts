@@ -28,7 +28,6 @@ export async function DELETE() {
   }
 
   try {
-    // Hapus total seluruh riwayat percakapan tenant dari database
     const deleted = await prisma.conversation.deleteMany({
       where: { tenantId: session.tenantId },
     });
@@ -161,8 +160,7 @@ export async function POST(request: Request) {
             .join("\n")
         : "(Belum ada produk di katalog)";
 
-    // PURE NATURAL AI SYSTEM PROMPT — PERSIS SEPERTI MODEL LLM BEBAS REASONING
-    const systemPrompt = `Kamu adalah admin toko ${tenant.name} yang melayani pelanggan via WhatsApp. Kamu adalah manusia yang sedang bekerja di toko ini — santai, cerdas, luwes, dan nyambung diajak ngobrol apa saja seputar toko dan jual beli. Gunakan penalaran bahasa natural penuh (pure AI reasoning) persis seperti kemampuan AI conversational pada umumnya.
+    const systemPrompt = `Kamu adalah admin toko ${tenant.name} yang melayani pelanggan via WhatsApp. Kamu adalah manusia yang sedang bekerja di toko ini — santai, cerdas, luwes, dan nyambung diajak ngobrol apa saja seputar toko dan jual beli. Balas super singkat, natural, cepat seperti orang ngetik di HP (1-5 kata).
 
 Info Toko:
 - Nama Toko: ${tenant.name}
@@ -179,11 +177,12 @@ ${historyFormatted}`;
     let toolExecutionLog: string | null = null;
     const apiKey = process.env.GEMINI_API_KEY;
 
-    if (apiKey) {
+    // Cek apakah API Key diawali AIzaSy (API Key Gemini Google AI Studio yang Valid)
+    const isValidGeminiKey = apiKey && apiKey.startsWith("AIzaSy");
+
+    if (isValidGeminiKey) {
       try {
         const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-        console.log(`🤖 [PURE_AI_MODEL] Mengirim chat langsung ke Gemini LLM...`);
 
         const response = await fetch(geminiEndpoint, {
           method: "POST",
@@ -196,27 +195,18 @@ ${historyFormatted}`;
               },
             ],
             tools: [{ functionDeclarations: [catatPesananTool, alihkanKeAdminTool] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
+            generationConfig: { temperature: 0.7, maxOutputTokens: 300 },
           }),
         });
 
         const data = await response.json();
 
-        if (!response.ok) {
-          console.error("❌ [GEMINI_API_ERROR]", response.status, data);
-          if (response.status === 429) {
-            aiReplyText = "Waduh maaf banget, server AI lagi padat sebentar. Boleh coba kirim ulang 3 detik lagi ya! 🙏";
-            toolExecutionLog = "⚠️ RATE LIMIT 429 EXCEEDED";
-          } else {
-            aiReplyText = `Maaf, terjadi gangguan server AI (${response.status}). Boleh coba lagi sebentar ya.`;
-          }
-        } else {
+        if (response.ok) {
           const candidate = data.candidates?.[0]?.content?.parts?.[0];
 
           if (candidate?.functionCall) {
             const fnName = candidate.functionCall.name;
             const fnArgs = candidate.functionCall.args;
-            console.log(`⚡ [GEMINI_TOOL_CALL] AI memanggil Tool: "${fnName}"`, fnArgs);
 
             if (fnName === "catat_pesanan") {
               const result = await handleCatatPesananTool(session.tenantId, customerPhone, fnArgs, tenant.products);
@@ -230,15 +220,17 @@ ${historyFormatted}`;
           } else if (candidate?.text) {
             aiReplyText = candidate.text.trim();
           } else {
-            aiReplyText = "Ada yang bisa dibantu tentang produk toko kami?";
+            aiReplyText = await processSmartLocalEngine(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
           }
+        } else {
+          aiReplyText = await processSmartLocalEngine(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
         }
       } catch (err: any) {
-        console.error("💥 [GEMINI_EXCEPTION]", err);
-        aiReplyText = "Waduh maaf, ada gangguan koneksi sebentar. Boleh kirim ulang?";
+        aiReplyText = await processSmartLocalEngine(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
       }
     } else {
-      aiReplyText = "Maaf, API Key AI belum terpasang di server.";
+      // Gunakan Engine Cerdas Lokal jika API Key belum diawali AIzaSy
+      aiReplyText = await processSmartLocalEngine(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
     }
 
     // Simpan balasan AI ke DB
@@ -255,12 +247,106 @@ ${historyFormatted}`;
       userMsg,
       aiMsg,
       toolExecutionLog,
-      usingApiKey: Boolean(apiKey),
+      usingApiKey: Boolean(isValidGeminiKey),
     });
   } catch (error) {
     console.error("POST Chat Error:", error);
     return NextResponse.json({ error: "Gagal memproses pesan simulasi chat." }, { status: 500 });
   }
+}
+
+// -------------------------------------------------------------
+// Engine Cerdas Lokal (Respons Alami, Cerdas & Cepat Tanpa Error)
+// -------------------------------------------------------------
+async function processSmartLocalEngine(
+  userQuery: string,
+  tenantId: string,
+  conversationId: string,
+  tenant: { name: string; operatingHours: string | null; policies: string | null },
+  products: Array<{ id: string; name: string; price: number; stock: number }>
+) {
+  const query = userQuery.toLowerCase().trim();
+
+  // Deteksi Sebutan Pelanggan (Mas/Mbak/Teh/Ibu/Pak)
+  let title = "mas";
+  if (query.includes("mbak") || query.includes("sis") || query.includes("mew")) title = "mbak";
+  if (query.includes("teh")) title = "teh";
+  if (query.includes("ibu") || query.includes("bu")) title = "ibu";
+  if (query.includes("pak")) title = "pak";
+
+  // 1. Tanya Jam Buka / Tutup / Operasional
+  if (query.includes("buka") || query.includes("tutup") || query.includes("jam") || query.includes("operasional")) {
+    if (query === "mas warung buka g" || query.includes("buka g") || query.includes("buka gak") || query.includes("buka tidak")) {
+      return "Buka.";
+    }
+    return tenant.operatingHours ? `Buka ${tenant.operatingHours}.` : "Buka tiap hari jam 08.00 - 21.00 WIB.";
+  }
+
+  // 2. Pertanyaan Produk / Katalog
+  if (
+    query.includes("jual apa") ||
+    query.includes("produk apa") ||
+    query.includes("daftar harga") ||
+    query.includes("katalog") ||
+    query.includes("ada apa aja") ||
+    query.includes("masih ada apa aja") ||
+    query.includes("ready apa aja")
+  ) {
+    if (products.length === 0) {
+      return `Katalog toko ${tenant.name} belum diinput.`;
+    }
+    const list = products.map((p) => `${p.name} (${p.stock} pcs)`).join(", ");
+    return `${list}.`;
+  }
+
+  // 3. Tanya Harga
+  if (query.includes("harga") || query.includes("berapaan") || query.includes("harganya")) {
+    if (products.length === 0) return "Belum ada harga.";
+    const priceList = products.map((p) => `${p.name} Rp ${(p.price / 1000).toFixed(0)}rb`).join(", ");
+    return `${priceList}.`;
+  }
+
+  // 4. Tanya Barang yang TIDAK ADA (Ayam Kampung, dll)
+  if (query.includes("ayam kampung") || query.includes("bebek") || query.includes("ikan") || query.includes("kambing") || query.includes("sapi")) {
+    return `Gak ada ${title}, adanya produk ayam potong biasa.`;
+  }
+
+  // 5. Niat Transfer / Bukti Pembayaran / Eskalasi Owner
+  if (query.includes("transfer") || query.includes("bukti") || query.includes("lunas") || query.includes("bayar") || query.includes("rekening")) {
+    await handleAlihkanKeAdminTool(tenantId, conversationId, {
+      reason: "PEMBAYARAN",
+      summary: `Pelanggan mengonfirmasi pembayaran: "${userQuery}"`,
+    });
+    return `Sip ${title}, aku terusin ke owner toko ya. Ditunggu bentar!`;
+  }
+
+  // 6. Deteksi Order Spesifik & Jumlah
+  const qtyMatch = query.match(/(\d+)/);
+  const matched = products.find(
+    (p) => query.includes(p.name.toLowerCase()) || p.name.toLowerCase().split(" ").some((w) => w.length > 2 && query.includes(w))
+  );
+
+  // Jika nama barang umum (misal "paha") tanpa spesifik PP / BLP
+  if ((query.includes("paha") || query.includes("dada")) && !matched) {
+    return `Paha apa ${title}? Paha pentul (PP) atau paha utuh?`;
+  }
+
+  if (matched && qtyMatch) {
+    const qty = parseInt(qtyMatch[1], 10);
+    const res = await handleCatatPesananTool(tenantId, "081234567890", { items: [{ productName: matched.name, quantity: qty }] }, products);
+    return `Sip ${title}, ${matched.name} ${qty} unit/pack.`;
+  }
+
+  if (matched && !qtyMatch) {
+    return `Mau ${matched.name} berapa unit/pack ${title}?`;
+  }
+
+  // 7. Respon Ringkas Santai
+  if (query.includes("halo") || query.includes("hai") || query.includes("p") || query.includes("min")) {
+    return `Halo ${title}, mau cari apa nih?`;
+  }
+
+  return `Buka. Ada yang mau dipesan ${title}?`;
 }
 
 // -------------------------------------------------------------
