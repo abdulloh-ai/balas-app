@@ -44,12 +44,12 @@ export async function DELETE() {
 }
 
 // -------------------------------------------------------------
-// Definisi Function Declarations (Tools) untuk Gemini API
+// PURE AI TOOL DECLARATIONS
 // -------------------------------------------------------------
 const catatPesananTool = {
   name: "catat_pesanan",
   description:
-    "Dipanggil saat pelanggan sudah cukup jelas menyatakan barang dan jumlah yang mereka mau dipesan. Jika belum jelas, tanyakan dengan wajar seperti percakapan normal.",
+    "Dipanggil saat pelanggan menyatakan pesanan produk dan jumlahnya secara pasti.",
   parameters: {
     type: "OBJECT",
     properties: {
@@ -83,7 +83,7 @@ const catatPesananTool = {
 const alihkanKeAdminTool = {
   name: "alihkan_ke_admin",
   description:
-    "Dipanggil saat pelanggan mengirim bukti transfer/pembayaran, komplain serius, nego harga khusus, atau meminta penanganan langsung oleh owner toko.",
+    "Dipanggil saat pelanggan mengirim bukti transfer, komplain serius, nego harga khusus, atau meminta bicara langsung dengan owner toko.",
   parameters: {
     type: "OBJECT",
     properties: {
@@ -137,11 +137,11 @@ export async function POST(request: Request) {
       },
     });
 
-    // Ambil riwayat percakapan terakhir untuk memberi konteks percakapan
+    // Ambil riwayat percakapan terakhir untuk konteks penuh
     const recentHistory = await prisma.conversation.findMany({
       where: { tenantId: session.tenantId, customerPhone },
       orderBy: { createdAt: "desc" },
-      take: 8,
+      take: 10,
     });
     recentHistory.reverse();
 
@@ -161,23 +161,18 @@ export async function POST(request: Request) {
             .join("\n")
         : "(Belum ada produk di katalog)";
 
-    const systemPrompt = `Kamu adalah ${tenant.name}. Kamu ngobrol sama pelanggan lewat WhatsApp seperti manusia biasa yang kerja di toko ini — bukan customer service formal, bukan asisten AI yang baku. Ngobrol natural, bebas, apa adanya, seperti kamu benar-benar orangnya.
+    // PURE NATURAL AI SYSTEM PROMPT — PERSIS SEPERTI MODEL LLM BEBAS REASONING
+    const systemPrompt = `Kamu adalah admin toko ${tenant.name} yang melayani pelanggan via WhatsApp. Kamu adalah manusia yang sedang bekerja di toko ini — santai, cerdas, luwes, dan nyambung diajak ngobrol apa saja seputar toko dan jual beli. Gunakan penalaran bahasa natural penuh (pure AI reasoning) persis seperti kemampuan AI conversational pada umumnya.
 
-Kamu boleh menjawab apapun, dengan gaya apapun, topik apapun yang muncul dalam obrolan — santai, bercanda, to the point, sesuai konteks chat yang berjalan. Tidak ada skrip atau pola tetap yang harus diikuti. Gunakan penalaran dan pemahaman bahasa natural sepenuhnya, seperti kemampuan AI pada umumnya dalam berbahasa dan memahami maksud orang.
-
-Info toko yang kamu tahu:
-- Nama Bisnis: ${tenant.name}
-- Deskripsi Singkat: ${tenant.description || "Toko online terpercaya"}
-- Jam Operasional: ${tenant.operatingHours || "Setiap hari 08.00 - 21.00 WIB"}
-- Kebijakan/Info Toko: ${tenant.policies || "Pengiriman cepat & terpercaya"}
-- Daftar Produk, Harga, & Stok Saat Ini:
+Info Toko:
+- Nama Toko: ${tenant.name}
+- Deskripsi: ${tenant.description || "Toko terpercaya"}
+- Jam Operasional: ${tenant.operatingHours || "08.00 - 21.00 WIB"}
+- Kebijakan/Info: ${tenant.policies || "Pengiriman cepat & aman"}
+- Katalog Produk & Stok Saat Ini:
 ${productCatalogText}
 
-Kamu berbicara TENTANG toko ini menggunakan info di atas. Untuk hal yang benar-benar tidak kamu ketahui datanya, jawab saja apa adanya bahwa kamu belum tahu — sama seperti orang biasa akan bilang 'kurang tahu saya' untuk hal yang memang tidak dia ketahui, bukan mengarang jawaban.
-
-Untuk mencatat pesanan: lakukan saat pelanggan sudah cukup jelas menyatakan barang dan jumlah yang mereka mau (panggil tool catat_pesanan). Kalau belum jelas, tanyakan dengan wajar seperti percakapan normal — bukan karena aturan kaku, tapi karena memang begitu cara kerja transaksi yang masuk akal.
-
-RIWAYAT PERCAKAPAN:
+RIWAYAT CHAT:
 ${historyFormatted}`;
 
     let aiReplyText = "";
@@ -188,7 +183,7 @@ ${historyFormatted}`;
       try {
         const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-        console.log(`🤖 [GEMINI_API] Memanggil endpoint Gemini API untuk pesan: "${message.trim()}"`);
+        console.log(`🤖 [PURE_AI_MODEL] Mengirim chat langsung ke Gemini LLM...`);
 
         const response = await fetch(geminiEndpoint, {
           method: "POST",
@@ -201,26 +196,19 @@ ${historyFormatted}`;
               },
             ],
             tools: [{ functionDeclarations: [catatPesananTool, alihkanKeAdminTool] }],
-            generationConfig: { temperature: 0.75, maxOutputTokens: 500 },
+            generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
           }),
         });
 
         const data = await response.json();
 
-        // -------------------------------------------------------------
-        // AUDIT & LOGGING EXPLICIT JIKA TERJADI ERROR PADA GEMINI API
-        // -------------------------------------------------------------
         if (!response.ok) {
-          console.error("❌ [GEMINI_API_ERROR] HTTP Status Error:", response.status, response.statusText);
-          console.error("❌ [GEMINI_API_ERROR] Detail Response Payload:", JSON.stringify(data, null, 2));
-
+          console.error("❌ [GEMINI_API_ERROR]", response.status, data);
           if (response.status === 429) {
-            console.error("⚠️ [RATE_LIMIT_EXCEEDED] Gemini API Free Tier 15 RPM (Request Per Minute) terlampaui!");
-            toolExecutionLog = "⚠️ RATE LIMIT 429 EXCEEDED: Batas 15 Request/Menit terlampaui saat pengujian cepat.";
-            aiReplyText = "Waduh maaf banget Kak, server AI sedang padat sebentar (Rate Limit 15 req/menit). Boleh coba kirim ulang dalam 3-5 detik lagi ya! 🙏";
+            aiReplyText = "Waduh maaf banget, server AI lagi padat sebentar. Boleh coba kirim ulang 3 detik lagi ya! 🙏";
+            toolExecutionLog = "⚠️ RATE LIMIT 429 EXCEEDED";
           } else {
-            toolExecutionLog = `❌ GEMINI ERROR (${response.status}): ${data.error?.message || "HTTP Request Failed"}`;
-            aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
+            aiReplyText = `Maaf, terjadi gangguan server AI (${response.status}). Boleh coba lagi sebentar ya.`;
           }
         } else {
           const candidate = data.candidates?.[0]?.content?.parts?.[0];
@@ -228,7 +216,7 @@ ${historyFormatted}`;
           if (candidate?.functionCall) {
             const fnName = candidate.functionCall.name;
             const fnArgs = candidate.functionCall.args;
-            console.log(`⚡ [GEMINI_TOOL_CALL] AI memanggil Tool: "${fnName}" dengan Argumen:`, fnArgs);
+            console.log(`⚡ [GEMINI_TOOL_CALL] AI memanggil Tool: "${fnName}"`, fnArgs);
 
             if (fnName === "catat_pesanan") {
               const result = await handleCatatPesananTool(session.tenantId, customerPhone, fnArgs, tenant.products);
@@ -240,21 +228,17 @@ ${historyFormatted}`;
               toolExecutionLog = result.log;
             }
           } else if (candidate?.text) {
-            console.log(`✅ [GEMINI_RESPONSE_SUCCESS] Balasan AI diterima (${candidate.text.length} karakter).`);
             aiReplyText = candidate.text.trim();
           } else {
-            console.warn("⚠️ [GEMINI_EMPTY_RESPONSE] Response diterima 200 OK tetapi tidak ada candidate text/functionCall:", JSON.stringify(data));
-            aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
+            aiReplyText = "Ada yang bisa dibantu tentang produk toko kami?";
           }
         }
       } catch (err: any) {
-        console.error("💥 [GEMINI_FETCH_EXCEPTION] Gagal melakukan HTTP request ke Gemini API:", err);
-        toolExecutionLog = `💥 FETCH EXCEPTION: ${err?.message || err}`;
-        aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
+        console.error("💥 [GEMINI_EXCEPTION]", err);
+        aiReplyText = "Waduh maaf, ada gangguan koneksi sebentar. Boleh kirim ulang?";
       }
     } else {
-      console.warn("⚠️ [NO_GEMINI_API_KEY] GEMINI_API_KEY tidak ditemukan di file .env. Menggunakan Fallback Logic.");
-      aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
+      aiReplyText = "Maaf, API Key AI belum terpasang di server.";
     }
 
     // Simpan balasan AI ke DB
@@ -280,7 +264,7 @@ ${historyFormatted}`;
 }
 
 // -------------------------------------------------------------
-// Helper Handlers untuk Tool Execution & Fallback Logic Alami
+// Helper Handlers untuk Tool Execution
 // -------------------------------------------------------------
 async function handleCatatPesananTool(
   tenantId: string,
@@ -311,7 +295,7 @@ async function handleCatatPesananTool(
 
     if (!targetProduct) {
       return {
-        message: `Waduh kurang tahu deh, produk itu belum ada di daftar toko kita.`,
+        message: `Waduh maaf, produk itu belum ada di katalog toko kita.`,
         log: `Tool catat_pesanan gagal: produk tidak ditemukan.`,
       };
     }
@@ -321,7 +305,7 @@ async function handleCatatPesananTool(
     if (targetProduct.stock < qty) {
       return {
         message: `Stok ${targetProduct.name} sisa ${targetProduct.stock} pcs nih, belum cukup kalau pesan ${qty} pcs.`,
-        log: `Tool catat_pesanan gagal: stok ${targetProduct.name} kurang (${targetProduct.stock} < ${qty}).`,
+        log: `Tool catat_pesanan gagal: stok ${targetProduct.name} kurang.`,
       };
     }
 
@@ -382,75 +366,4 @@ async function handleAlihkanKeAdminTool(tenantId: string, conversationId: string
     message: `Oke siap, pesan kamu udah aku terusin ke owner toko ya. Ditunggu sebentar ya!`,
     log: `Tool alihkan_ke_admin SUKSES: Record Eskalasi dibuat (Reason: ${reason}).`,
   };
-}
-
-async function processFallbackLogic(
-  userQuery: string,
-  tenantId: string,
-  conversationId: string,
-  tenant: { name: string; operatingHours: string | null; policies: string | null },
-  products: Array<{ id: string; name: string; price: number; stock: number }>
-) {
-  const query = userQuery.toLowerCase();
-
-  // Pertanyaan Produk / Katalog
-  if (
-    query.includes("jual apa") ||
-    query.includes("produk apa") ||
-    query.includes("daftar harga") ||
-    query.includes("katalog") ||
-    query.includes("menu") ||
-    query.includes("ada apa aja") ||
-    query.includes("list produk")
-  ) {
-    if (products.length === 0) {
-      return `Katalog produk toko ${tenant.name} belum ada datanya nih.`;
-    }
-    const productListFormatted = products
-      .map((p) => `• ${p.name} - Rp ${p.price.toLocaleString("id-ID")} (Stok: ${p.stock})`)
-      .join("\n");
-
-    return `Di ${tenant.name} ada ini nih:\n${productListFormatted}\n\nMau pesan yang mana?`;
-  }
-
-  // Niat transfer / bayar / bukti
-  if (query.includes("transfer") || query.includes("bukti") || query.includes("lunas") || query.includes("bayar")) {
-    const res = await handleAlihkanKeAdminTool(tenantId, conversationId, {
-      reason: "PEMBAYARAN",
-      summary: `Pelanggan mengonfirmasi pembayaran/bukti transfer: "${userQuery}"`,
-    });
-    return res.message;
-  }
-
-  // Deteksi Pesanan Langsung (HANYA JIKA JUMLAH & PRODUK SUDAH JELAS)
-  const qtyMatch = query.match(/(\d+)/);
-  const matched = products.find(
-    (p) => query.includes(p.name.toLowerCase()) || p.name.toLowerCase().split(" ").some((w) => w.length > 3 && query.includes(w))
-  );
-
-  const isExplicitOrder =
-    matched && qtyMatch && (query.includes("pesan") || query.includes("beli") || query.includes("order") || query.includes("mau") || query.includes("ambil"));
-
-  if (isExplicitOrder) {
-    const qty = parseInt(qtyMatch[1], 10);
-    const res = await handleCatatPesananTool(tenantId, "081234567890", { items: [{ productName: matched.name, quantity: qty }] }, products);
-    return res.message;
-  }
-
-  if (matched && !qtyMatch && (query.includes("pesan") || query.includes("beli") || query.includes("order") || query.includes("mau"))) {
-    return `Mau pesan ${matched.name} berapa pcs/pack? Sebutin jumlahnya ya biar aku catet.`;
-  }
-
-  // Tanya jam buka
-  if (query.includes("jam") || query.includes("buka") || query.includes("tutup") || query.includes("operasional")) {
-    return tenant.operatingHours ? `Kita buka: ${tenant.operatingHours}` : `Buka setiap hari ya.`;
-  }
-
-  // Tanya produk spesifik
-  if (matched) {
-    return `${matched.name} harganya Rp ${matched.price.toLocaleString("id-ID")}, stok sisa ${matched.stock} pcs.`;
-  }
-
-  // Fallback Dinamis & Transparan (Bukan kalimat statis berulang-ulang)
-  return `Halo! Pesan kamu tentang "${userQuery}" sudah diterima. Ada yang mau dipesan dari toko ${tenant.name}?`;
 }
