@@ -184,3 +184,30 @@ enum EscalationStatus {
   BELUM_SELESAI
   SELESAI
 }
+
+// -------------------------------------------------------------
+// 8. DemoRequest (PermintaanDemo dari Form Landing Page)
+// -------------------------------------------------------------
+model DemoRequest {
+  id           String   @id @default(cuid())
+  name         String
+  businessName String
+  whatsapp     String
+  status       String   @default("PENDING") // PENDING, CONTACTED
+  createdAt    DateTime @default(now())
+}
+
+// -------------------------------------------------------------
+// 9. Plan (Paket Harga SaaS Dinamis)
+// -------------------------------------------------------------
+model Plan {
+  id          String   @id @default(cuid())
+  name        String
+  price       Float
+  period      String   @default("bulan")
+  description String
+  features    String
+  isPopular   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
