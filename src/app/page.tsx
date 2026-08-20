@@ -17,17 +17,21 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#2F6A55]/10 text-[#2F6A55] text-xs font-semibold rounded-full border border-[#2F6A55]/20">
-            <span className="w-2 h-2 rounded-full bg-[#2F6A55] animate-pulse"></span>
-            Tahap Inisialisasi Project
-          </span>
+        <div className="flex items-center gap-3">
+          <Link href="/login">
+            <Button variant="primary" className="px-5 py-2 text-xs font-bold bg-[#2F6A55] text-white rounded-xl shadow-sm">
+              🔑 Masuk / Daftar Akun
+            </Button>
+          </Link>
         </div>
       </header>
 
       {/* Main Hero & Portal Navigator */}
       <main className="max-w-5xl w-full mx-auto py-12 space-y-10">
         <div className="text-center max-w-2xl mx-auto space-y-4">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-[#2F6A55]/10 text-[#2F6A55] text-xs font-bold rounded-full border border-[#2F6A55]/20">
+            ✨ Platform SaaS Otomatisasi WA & Rekap Operasional UMKM
+          </span>
           <h2 className="text-3xl md:text-4xl font-extrabold text-[#1F2A24] tracking-tight leading-tight">
             Asisten Otomatisasi WA & Rekap Operasional Mikro
           </h2>
@@ -36,7 +40,27 @@ export default function Home() {
           </p>
         </div>
 
-        {/* 2 Lapis Portal Cards */}
+        {/* 1 Door Smart Login Callout */}
+        <div className="bg-white border border-[#E2E0D8] rounded-3xl p-8 max-w-2xl mx-auto text-center space-y-4 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-[#2F6A55]/10 text-[#2F6A55] flex items-center justify-center font-bold text-2xl mx-auto">
+            🚪
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xl font-bold text-[#1F2A24]">Pintu Masuk Utama Platform</h3>
+            <p className="text-xs text-[#6B7570] max-w-md mx-auto leading-relaxed">
+              Satu halaman login untuk semua. Sistem secara otomatis mengenali peran Anda (Pemilik UMKM atau Super Admin) dan mengarahkan ke dashboard yang sesuai.
+            </p>
+          </div>
+          <div className="pt-2">
+            <Link href="/login" className="inline-block w-full max-w-xs">
+              <Button variant="primary" className="w-full py-3.5 text-sm font-bold bg-[#2F6A55] text-white rounded-xl shadow-md">
+                Buka Halaman Login & Pendaftaran →
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* 2 Lapis Portal Preview */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
           {/* Lapis 1: Platform Owner */}
           <Card className="hover:border-[#2F6A55]/40 transition-all flex flex-col justify-between h-full">
@@ -49,13 +73,13 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-bold text-[#1F2A24]">Dashboard Platform</h3>
               <p className="text-sm text-[#6B7570] leading-relaxed">
-                Panel pengawasan khusus pemilik SaaS untuk memantau seluruh UMKM berlangganan, kesehatan bot WA, serta kuota penggunaan AI.
+                Panel pengawasan khusus pemilik SaaS untuk memantau seluruh UMKM berlangganan, status billing MRR, serta kesehatan bot WA.
               </p>
             </div>
             <div className="pt-6">
-              <Link href="/admin" className="w-full inline-block">
-                <Button variant="primary" className="w-full py-3">
-                  Masuk Dashboard Platform →
+              <Link href="/admin/login" className="w-full inline-block">
+                <Button variant="secondary" className="w-full py-3 text-xs">
+                  Login Khusus Super Admin →
                 </Button>
               </Link>
             </div>
@@ -76,21 +100,13 @@ export default function Home() {
               </p>
             </div>
             <div className="pt-6">
-              <Link href="/dashboard" className="w-full inline-block">
-                <Button variant="secondary" className="w-full py-3">
-                  Masuk Dashboard Bisnis →
+              <Link href="/dashboard/login" className="w-full inline-block">
+                <Button variant="secondary" className="w-full py-3 text-xs">
+                  Login Khusus Pemilik UMKM →
                 </Button>
               </Link>
             </div>
           </Card>
-        </div>
-
-        {/* Note Lapis 3 */}
-        <div className="bg-white border border-[#E2E0D8] rounded-2xl p-5 text-center max-w-xl mx-auto space-y-1">
-          <p className="text-xs font-bold text-[#1F2A24] uppercase tracking-wider">💡 Informasi Lapis 3 (End Customer)</p>
-          <p className="text-xs text-[#6B7570]">
-            Pelanggan toko <span className="font-semibold text-[#1F2A24]">TIDAK memiliki akses ke dashboard web</span>. Seluruh interaksi pembelian dan tanya jawab dilakukan 100% via aplikasi WhatsApp biasa.
-          </p>
         </div>
       </main>
 
