@@ -115,7 +115,7 @@ export default function LandingPageClient() {
           </Link>
 
           <Link href="/login">
-            <Button className="px-5 py-2.5 text-xs font-bold bg-white text-[#1F2A24] border border-[#E2E0D8] rounded-xl hover:border-[#2F6A55] hover:text-[#2F6A55] transition-all shadow-sm">
+            <Button className="px-6 py-2.5 text-xs font-bold bg-[#2F6A55] text-white rounded-xl hover:bg-[#265746] transition-all shadow-sm">
               Masuk →
             </Button>
           </Link>
@@ -144,7 +144,7 @@ export default function LandingPageClient() {
             </Button>
           </a>
           <a href="#cara-kerja" className="w-full sm:w-auto">
-            <Button variant="secondary" className="w-full sm:w-auto px-8 py-4 text-sm font-bold bg-white text-[#1F2A24] border border-[#E2E0D8] rounded-2xl hover:border-[#2F6A55] transition-all">
+            <Button variant="secondary" className="w-full sm:w-auto px-8 py-4 text-sm font-bold bg-transparent text-[#1F2A24] border-2 border-[#1F2A24]/20 rounded-2xl hover:border-[#2F6A55] hover:text-[#2F6A55] transition-all">
               Lihat Cara Kerjanya ↓
             </Button>
           </a>
@@ -330,7 +330,7 @@ export default function LandingPageClient() {
                     <Button
                       variant={plan.isPopular ? "primary" : "secondary"}
                       className={`w-full py-3 text-xs font-bold rounded-xl ${
-                        plan.isPopular ? "bg-[#2F6A55] text-white" : ""
+                        plan.isPopular ? "bg-[#2F6A55] text-white hover:bg-[#265746]" : "bg-transparent text-[#1F2A24] border border-[#E2E0D8] hover:border-[#2F6A55]"
                       }`}
                     >
                       Pilih Paket {plan.name} →
