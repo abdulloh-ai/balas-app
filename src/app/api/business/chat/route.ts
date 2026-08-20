@@ -188,6 +188,8 @@ ${historyFormatted}`;
       try {
         const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
+        console.log(`🤖 [GEMINI_API] Memanggil endpoint Gemini API untuk pesan: "${message.trim()}"`);
+
         const response = await fetch(geminiEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -204,31 +206,54 @@ ${historyFormatted}`;
         });
 
         const data = await response.json();
-        const candidate = data.candidates?.[0]?.content?.parts?.[0];
 
-        if (candidate?.functionCall) {
-          const fnName = candidate.functionCall.name;
-          const fnArgs = candidate.functionCall.args;
+        // -------------------------------------------------------------
+        // AUDIT & LOGGING EXPLICIT JIKA TERJADI ERROR PADA GEMINI API
+        // -------------------------------------------------------------
+        if (!response.ok) {
+          console.error("❌ [GEMINI_API_ERROR] HTTP Status Error:", response.status, response.statusText);
+          console.error("❌ [GEMINI_API_ERROR] Detail Response Payload:", JSON.stringify(data, null, 2));
 
-          if (fnName === "catat_pesanan") {
-            const result = await handleCatatPesananTool(session.tenantId, customerPhone, fnArgs, tenant.products);
-            aiReplyText = result.message;
-            toolExecutionLog = result.log;
-          } else if (fnName === "alihkan_ke_admin") {
-            const result = await handleAlihkanKeAdminTool(session.tenantId, userMsg.id, fnArgs);
-            aiReplyText = result.message;
-            toolExecutionLog = result.log;
+          if (response.status === 429) {
+            console.error("⚠️ [RATE_LIMIT_EXCEEDED] Gemini API Free Tier 15 RPM (Request Per Minute) terlampaui!");
+            toolExecutionLog = "⚠️ RATE LIMIT 429 EXCEEDED: Batas 15 Request/Menit terlampaui saat pengujian cepat.";
+            aiReplyText = "Waduh maaf banget Kak, server AI sedang padat sebentar (Rate Limit 15 req/menit). Boleh coba kirim ulang dalam 3-5 detik lagi ya! 🙏";
+          } else {
+            toolExecutionLog = `❌ GEMINI ERROR (${response.status}): ${data.error?.message || "HTTP Request Failed"}`;
+            aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
           }
-        } else if (candidate?.text) {
-          aiReplyText = candidate.text.trim();
         } else {
-          aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
+          const candidate = data.candidates?.[0]?.content?.parts?.[0];
+
+          if (candidate?.functionCall) {
+            const fnName = candidate.functionCall.name;
+            const fnArgs = candidate.functionCall.args;
+            console.log(`⚡ [GEMINI_TOOL_CALL] AI memanggil Tool: "${fnName}" dengan Argumen:`, fnArgs);
+
+            if (fnName === "catat_pesanan") {
+              const result = await handleCatatPesananTool(session.tenantId, customerPhone, fnArgs, tenant.products);
+              aiReplyText = result.message;
+              toolExecutionLog = result.log;
+            } else if (fnName === "alihkan_ke_admin") {
+              const result = await handleAlihkanKeAdminTool(session.tenantId, userMsg.id, fnArgs);
+              aiReplyText = result.message;
+              toolExecutionLog = result.log;
+            }
+          } else if (candidate?.text) {
+            console.log(`✅ [GEMINI_RESPONSE_SUCCESS] Balasan AI diterima (${candidate.text.length} karakter).`);
+            aiReplyText = candidate.text.trim();
+          } else {
+            console.warn("⚠️ [GEMINI_EMPTY_RESPONSE] Response diterima 200 OK tetapi tidak ada candidate text/functionCall:", JSON.stringify(data));
+            aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
+          }
         }
-      } catch (err) {
-        console.error("Gemini Tool API Error:", err);
+      } catch (err: any) {
+        console.error("💥 [GEMINI_FETCH_EXCEPTION] Gagal melakukan HTTP request ke Gemini API:", err);
+        toolExecutionLog = `💥 FETCH EXCEPTION: ${err?.message || err}`;
         aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
       }
     } else {
+      console.warn("⚠️ [NO_GEMINI_API_KEY] GEMINI_API_KEY tidak ditemukan di file .env. Menggunakan Fallback Logic.");
       aiReplyText = await processFallbackLogic(message.trim(), session.tenantId, userMsg.id, tenant, tenant.products);
     }
 
@@ -426,5 +451,6 @@ async function processFallbackLogic(
     return `${matched.name} harganya Rp ${matched.price.toLocaleString("id-ID")}, stok sisa ${matched.stock} pcs.`;
   }
 
-  return `Ada yang bisa dibantu tentang produk ${tenant.name}?`;
+  // Fallback Dinamis & Transparan (Bukan kalimat statis berulang-ulang)
+  return `Halo! Pesan kamu tentang "${userQuery}" sudah diterima. Ada yang mau dipesan dari toko ${tenant.name}?`;
 }
