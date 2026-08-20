@@ -49,7 +49,7 @@ export async function DELETE() {
 const catatPesananTool = {
   name: "catat_pesanan",
   description:
-    "HANYA DIPANGGIL KETIKA PELANGGAN SUDAH MENYEBUTKAN PRODUK SPESIFIK DAN JUMLAHNYA DENGAN JELAS (misal: 'pesan 2 pack frozen beef teriyaki', 'mau 1 jar cookies'). JANGAN PERNAH PANGGIL TOOL INI KETIKA PRODUK ATAU JUMLAH BELUM JELAS!",
+    "Dipanggil saat pelanggan sudah cukup jelas menyatakan barang dan jumlah yang mereka mau dipesan. Jika belum jelas, tanyakan dengan wajar seperti percakapan normal.",
   parameters: {
     type: "OBJECT",
     properties: {
@@ -83,7 +83,7 @@ const catatPesananTool = {
 const alihkanKeAdminTool = {
   name: "alihkan_ke_admin",
   description:
-    "Dipanggil saat pelanggan mengirim bukti transfer/pembayaran, mengajukan komplain serius, nego harga khusus, atau meminta penanganan langsung oleh owner toko.",
+    "Dipanggil saat pelanggan mengirim bukti transfer/pembayaran, komplain serius, nego harga khusus, atau meminta penanganan langsung oleh owner toko.",
   parameters: {
     type: "OBJECT",
     properties: {
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
     recentHistory.reverse();
 
     const historyFormatted = recentHistory
-      .map((c) => `${c.sender === "PELANGGAN" ? "Pembeli" : "Admin Toko"}: "${c.message}"`)
+      .map((c) => `${c.sender === "PELANGGAN" ? "Pelanggan" : "Admin Toko"}: "${c.message}"`)
       .join("\n");
 
     const productCatalogText =
@@ -161,26 +161,23 @@ export async function POST(request: Request) {
             .join("\n")
         : "(Belum ada produk di katalog)";
 
-    const systemPrompt = `Kamu adalah admin toko ${tenant.name} yang membalas chat pelanggan. Kamu adalah manusia yang sedang kerja, bukan asisten AI formal. Balas SEPERSIS mungkin seperti orang asli mengetik cepat di HP: singkat, santai, natural, boleh pakai bahasa gaul wajar, tidak perlu selalu sopan-formal berlebihan.
+    const systemPrompt = `Kamu adalah ${tenant.name}. Kamu ngobrol sama pelanggan lewat WhatsApp seperti manusia biasa yang kerja di toko ini — bukan customer service formal, bukan asisten AI yang baku. Ngobrol natural, bebas, apa adanya, seperti kamu benar-benar orangnya.
 
-Kamu BEBAS menjawab apapun yang berkaitan dengan konteks toko dan obrolan jual-beli — dengan gaya bahasa apapun yang dipakai pelanggan, topik apapun seputar produk/toko, obrolan ringan, bercanda wajar, dll. Gunakan penalaran normal untuk memahami maksud orang, jangan terpaku pada pola/contoh tertentu saja.
+Kamu boleh menjawab apapun, dengan gaya apapun, topik apapun yang muncul dalam obrolan — santai, bercanda, to the point, sesuai konteks chat yang berjalan. Tidak ada skrip atau pola tetap yang harus diikuti. Gunakan penalaran dan pemahaman bahasa natural sepenuhnya, seperti kemampuan AI pada umumnya dalam berbahasa dan memahami maksud orang.
 
-Data yang kamu punya tentang toko ini (WAJIB dipatuhi, ini bukan pembatasan gaya bicara, tapi soal akurasi fakta):
-- Nama Toko: ${tenant.name}
-- Deskripsi: ${tenant.description || "Toko online terpercaya"}
+Info toko yang kamu tahu:
+- Nama Bisnis: ${tenant.name}
+- Deskripsi Singkat: ${tenant.description || "Toko online terpercaya"}
 - Jam Operasional: ${tenant.operatingHours || "Setiap hari 08.00 - 21.00 WIB"}
-- Kebijakan/Info Toko: ${tenant.policies || "Pengiriman cepat dan terpercaya"}
-- Daftar Produk & Stok Saat Ini:
+- Kebijakan/Info Toko: ${tenant.policies || "Pengiriman cepat & terpercaya"}
+- Daftar Produk, Harga, & Stok Saat Ini:
 ${productCatalogText}
 
-TIGA ATURAN YANG TIDAK BOLEH DILANGGAR APAPUN ALASANNYA (karena ini toko sungguhan, transaksi sungguhan, bukan obrolan biasa):
-1. JANGAN PERNAH menyebutkan harga, stok, atau detail produk yang TIDAK ADA di data di atas — kalau tidak tahu, akui saja dengan santai, jangan mengarang.
-2. JANGAN PERNAH mencatat pesanan (memanggil tool catat_pesanan) KECUALI pelanggan sudah menyebutkan produk spesifik DAN jumlahnya dengan jelas. Kalau belum jelas, tanya dulu, jangan menebak.
-3. JANGAN PERNAH mengklaim kamu manusia jika ditanya LANGSUNG dan JELAS apakah kamu AI/bot — jawab jujur dengan santai lalu lanjutkan membantu.
+Kamu berbicara TENTANG toko ini menggunakan info di atas. Untuk hal yang benar-benar tidak kamu ketahui datanya, jawab saja apa adanya bahwa kamu belum tahu — sama seperti orang biasa akan bilang 'kurang tahu saya' untuk hal yang memang tidak dia ketahui, bukan mengarang jawaban.
 
-Di luar tiga aturan itu, kamu punya kebebasan penuh untuk merespons secara natural, cerdas, dan kontekstual — seperti kemampuan reasoning AI pada umumnya, bukan chatbot berbasis skrip/pola tetap.
+Untuk mencatat pesanan: lakukan saat pelanggan sudah cukup jelas menyatakan barang dan jumlah yang mereka mau (panggil tool catat_pesanan). Kalau belum jelas, tanyakan dengan wajar seperti percakapan normal — bukan karena aturan kaku, tapi karena memang begitu cara kerja transaksi yang masuk akal.
 
-RIWAYAT CHAT:
+RIWAYAT PERCAKAPAN:
 ${historyFormatted}`;
 
     let aiReplyText = "";
@@ -198,7 +195,7 @@ ${historyFormatted}`;
             contents: [
               {
                 role: "user",
-                parts: [{ text: `${systemPrompt}\n\nPesan Terbaru Pembeli: "${message.trim()}"` }],
+                parts: [{ text: `${systemPrompt}\n\nPesan Terbaru Pelanggan: "${message.trim()}"` }],
               },
             ],
             tools: [{ functionDeclarations: [catatPesananTool, alihkanKeAdminTool] }],
@@ -289,7 +286,7 @@ async function handleCatatPesananTool(
 
     if (!targetProduct) {
       return {
-        message: `Waduh maaf produk itu gak ada di toko kita.`,
+        message: `Waduh kurang tahu deh, produk itu belum ada di daftar toko kita.`,
         log: `Tool catat_pesanan gagal: produk tidak ditemukan.`,
       };
     }
@@ -298,7 +295,7 @@ async function handleCatatPesananTool(
 
     if (targetProduct.stock < qty) {
       return {
-        message: `Stok ${targetProduct.name} sisa ${targetProduct.stock} pcs bro/sis, gak cukup buat ${qty} pcs.`,
+        message: `Stok ${targetProduct.name} sisa ${targetProduct.stock} pcs nih, belum cukup kalau pesan ${qty} pcs.`,
         log: `Tool catat_pesanan gagal: stok ${targetProduct.name} kurang (${targetProduct.stock} < ${qty}).`,
       };
     }
@@ -337,7 +334,7 @@ async function handleCatatPesananTool(
 
   const detailText = orderItemsToCreate.map((i) => `${i.productName} (${i.quantity}x)`).join(", ");
   return {
-    message: `Sip! Pesanan ${detailText} total Rp ${totalAmount.toLocaleString("id-ID")} udh dicatet ya. Tinggal transfer terus kirim buktinya ke sini ya!`,
+    message: `Sip! Pesanan ${detailText} total Rp ${totalAmount.toLocaleString("id-ID")} udah dicatat ya. Nanti kalau udah transfer kirim buktinya ke sini ya!`,
     log: `Tool catat_pesanan SUKSES: Order dibuat Rp ${totalAmount} & stok terpotong.`,
   };
 }
@@ -357,7 +354,7 @@ async function handleAlihkanKeAdminTool(tenantId: string, conversationId: string
   });
 
   return {
-    message: `Oke siap, pesan kamu udh aku terusin ke bos/owner toko ya. Ditunggu bentar ya!`,
+    message: `Oke siap, pesan kamu udah aku terusin ke owner toko ya. Ditunggu sebentar ya!`,
     log: `Tool alihkan_ke_admin SUKSES: Record Eskalasi dibuat (Reason: ${reason}).`,
   };
 }
@@ -382,13 +379,13 @@ async function processFallbackLogic(
     query.includes("list produk")
   ) {
     if (products.length === 0) {
-      return `Katalog produk toko ${tenant.name} belum diinput nih boss.`;
+      return `Katalog produk toko ${tenant.name} belum ada datanya nih.`;
     }
     const productListFormatted = products
       .map((p) => `• ${p.name} - Rp ${p.price.toLocaleString("id-ID")} (Stok: ${p.stock})`)
       .join("\n");
 
-    return `Di ${tenant.name} kita ada:\n${productListFormatted}\n\nMau ambil yang mana?`;
+    return `Di ${tenant.name} ada ini nih:\n${productListFormatted}\n\nMau pesan yang mana?`;
   }
 
   // Niat transfer / bayar / bukti
@@ -416,7 +413,7 @@ async function processFallbackLogic(
   }
 
   if (matched && !qtyMatch && (query.includes("pesan") || query.includes("beli") || query.includes("order") || query.includes("mau"))) {
-    return `Mau pesan ${matched.name} berapa pcs/pack? Sebutin jumlahnya ya biar aku catetin.`;
+    return `Mau pesan ${matched.name} berapa pcs/pack? Sebutin jumlahnya ya biar aku catet.`;
   }
 
   // Tanya jam buka
@@ -426,8 +423,8 @@ async function processFallbackLogic(
 
   // Tanya produk spesifik
   if (matched) {
-    return `${matched.name} harganya Rp ${matched.price.toLocaleString("id-ID")}, sisa stok ${matched.stock} pcs.`;
+    return `${matched.name} harganya Rp ${matched.price.toLocaleString("id-ID")}, stok sisa ${matched.stock} pcs.`;
   }
 
-  return `Yo! Ada yang bisa dibantu tentang produk ${tenant.name}?`;
+  return `Ada yang bisa dibantu tentang produk ${tenant.name}?`;
 }
