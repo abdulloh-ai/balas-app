@@ -1,34 +1,34 @@
-import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
+import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "balas_super_secret_platform_owner_key_2026"
 );
 
-const ADMIN_COOKIE_NAME = "balas_admin_session";
-const BUSINESS_COOKIE_NAME = "balas_business_session";
+const PLATFORM_SESSION_COOKIE = "balas_admin_session";
+const BUSINESS_SESSION_COOKIE = "balas_business_session";
 
 export async function hashPassword(password: string): Promise<string> {
   return await bcrypt.hash(password, 10);
 }
 
-export async function comparePassword(password: string, hash: string): Promise<boolean> {
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return await bcrypt.compare(password, hash);
 }
 
-// -------------------------------------------------------------
-// 1. PlatformOwner Session Helpers
-// -------------------------------------------------------------
+// Export alias for comparePassword
+export const comparePassword = verifyPassword;
+
 export async function createSession(payload: { id: string; email: string; name: string }) {
-  const token = await new SignJWT(payload)
+  const token = await new SignJWT({ ...payload, role: "PLATFORM_OWNER" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
     .sign(JWT_SECRET);
 
   const cookieStore = await cookies();
-  cookieStore.set(ADMIN_COOKIE_NAME, token, {
+  cookieStore.set(PLATFORM_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -39,27 +39,6 @@ export async function createSession(payload: { id: string; email: string; name: 
   return token;
 }
 
-export async function clearSession() {
-  const cookieStore = await cookies();
-  cookieStore.delete(ADMIN_COOKIE_NAME);
-}
-
-export async function getPlatformOwnerSession() {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
-    if (!token) return null;
-
-    const verified = await jwtVerify(token, JWT_SECRET);
-    return verified.payload as { id: string; email: string; name: string };
-  } catch (error) {
-    return null;
-  }
-}
-
-// -------------------------------------------------------------
-// 2. BusinessOwner Session Helpers
-// -------------------------------------------------------------
 export async function createBusinessSession(payload: {
   id: string;
   tenantId: string;
@@ -67,14 +46,14 @@ export async function createBusinessSession(payload: {
   name: string;
   role: string;
 }) {
-  const token = await new SignJWT(payload)
+  const token = await new SignJWT({ ...payload, role: "BUSINESS_OWNER" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
     .sign(JWT_SECRET);
 
   const cookieStore = await cookies();
-  cookieStore.set(BUSINESS_COOKIE_NAME, token, {
+  cookieStore.set(BUSINESS_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -85,26 +64,52 @@ export async function createBusinessSession(payload: {
   return token;
 }
 
-export async function clearBusinessSession() {
+export async function getPlatformOwnerSession() {
   const cookieStore = await cookies();
-  cookieStore.delete(BUSINESS_COOKIE_NAME);
+  const token = cookieStore.get(PLATFORM_SESSION_COOKIE)?.value;
+
+  if (!token) return null;
+
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    if (payload.role !== "PLATFORM_OWNER") return null;
+    return payload as { id: string; email: string; name: string; role: string };
+  } catch {
+    return null;
+  }
 }
 
 export async function getBusinessOwnerSession() {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(BUSINESS_COOKIE_NAME)?.value;
-    if (!token) return null;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(BUSINESS_SESSION_COOKIE)?.value;
 
-    const verified = await jwtVerify(token, JWT_SECRET);
-    return verified.payload as {
+  if (!token) return null;
+
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    if (payload.role !== "BUSINESS_OWNER") return null;
+    return payload as {
       id: string;
       tenantId: string;
       email: string;
       name: string;
       role: string;
     };
-  } catch (error) {
+  } catch {
     return null;
   }
 }
+
+export async function destroyPlatformOwnerSession() {
+  const cookieStore = await cookies();
+  cookieStore.delete(PLATFORM_SESSION_COOKIE);
+}
+
+export async function destroyBusinessOwnerSession() {
+  const cookieStore = await cookies();
+  cookieStore.delete(BUSINESS_SESSION_COOKIE);
+}
+
+// Export aliases for logout routes
+export const clearSession = destroyPlatformOwnerSession;
+export const clearBusinessSession = destroyBusinessOwnerSession;
