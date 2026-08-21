@@ -1,62 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
-interface PlanItem {
-  id: string;
-  name: string;
-  price: number;
-  period: string;
-  description: string;
-  features: string;
-  isPopular: boolean;
-}
-
 export default function LandingPageClient() {
-  const [plans, setPlans] = useState<PlanItem[]>([]);
-  const [loadingPlans, setLoadingPlans] = useState(true);
-
-  useEffect(() => {
-    fetchPlans();
-  }, []);
-
-  const fetchPlans = async () => {
-    try {
-      const res = await fetch("/api/plans");
-      const data = await res.json();
-      if (data.plans && data.plans.length > 0) {
-        setPlans(data.plans);
-      } else {
-        setPlans([
-          {
-            id: "1",
-            name: "Starter",
-            price: 149000,
-            period: "bulan",
-            description: "Cocok untuk warung & toko online mikro yang baru mulai.",
-            features:
-              "1 Nomor WhatsApp,Hingga 500 Chat/Bulan,Katalog & Stok Sederhana,Rekap Pesanan Otomatis,Dukungan Eskalasi Penanganan",
-            isPopular: true,
-          },
-          {
-            id: "2",
-            name: "Pro",
-            price: 299000,
-            period: "bulan",
-            description: "Untuk toko online aktif dengan volume chat harian tinggi.",
-            features:
-              "2 Nomor WhatsApp,Chat Tanpa Batas,Katalog & Stok Tanpa Batas,Rekap Keuangan & Laporan PDF,Prioritas Support 24/7",
-            isPopular: false,
-          },
-        ]);
-      }
-    } catch (err) {
-      console.error("Gagal mengambil data paket:", err);
-    } finally {
-      setLoadingPlans(false);
-    }
+  const singlePlan = {
+    name: "Balas",
+    price: 199000,
+    period: "bulan",
+    features: [
+      "1 Nomor WhatsApp",
+      "Chat tanpa batas",
+      "Katalog & Stok tanpa batas",
+      "Rekap Pesanan Otomatis",
+      "Rekap Keuangan & Laporan",
+      "Dukungan Eskalasi",
+    ],
   };
 
   return (
@@ -104,7 +63,7 @@ export default function LandingPageClient() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
           <Link href="/daftar" className="w-full sm:w-auto">
             <Button className="w-full sm:w-auto px-8 py-4 text-sm font-bold bg-[#2F6A55] text-white rounded-2xl shadow-lg hover:bg-[#265746] transition-all transform hover:-translate-y-0.5">
-              Coba Gratis Sekarang →
+              Daftar & Coba Sekarang →
             </Button>
           </Link>
           <a href="#cara-kerja" className="w-full sm:w-auto">
@@ -115,7 +74,7 @@ export default function LandingPageClient() {
         </div>
       </section>
 
-      {/* 3. BAGIAN MASALAH */}
+      {/* 3. BAGIAN MASALAH (POIN MASALAH BIASA) */}
       <section className="py-16 md:py-24 px-6 bg-white border-y border-[#E2E0D8]">
         <div className="max-w-5xl mx-auto space-y-12">
           <div className="text-center space-y-3">
@@ -123,42 +82,42 @@ export default function LandingPageClient() {
               Chat menumpuk, tapi kamu cuma satu orang.
             </h2>
             <p className="text-sm text-[#6B7570]">
-              Masalah nyata yang dihadapi ribuan pemilik usaha mikro tiap hari:
+              Tantangan operasional nyata yang sering menghambat pertumbuhan bisnis UMKM:
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-[#F5F3EE] p-6 rounded-3xl border border-[#E2E0D8] space-y-4 flex flex-col justify-between">
-              <p className="text-sm text-[#1F2A24] leading-relaxed italic">
-                &ldquo;Pelanggan tanya jam 11 malam, saya baru bales pagi. Keburu dia beli di tempat lain.&rdquo;
-              </p>
-              <div className="pt-4 border-t border-[#E2E0D8]/60 text-xs font-bold text-[#2F6A55]">
-                — Pemilik warung frozen food
+            <div className="bg-[#F5F3EE] p-6 md:p-8 rounded-3xl border border-[#E2E0D8] space-y-3 flex flex-col justify-start">
+              <div className="w-10 h-10 rounded-2xl bg-[#2F6A55]/10 text-[#2F6A55] flex items-center justify-center font-bold text-lg mb-1">
+                ⏰
               </div>
+              <p className="text-sm text-[#1F2A24] leading-relaxed">
+                Pelanggan sering bertanya di luar jam kerja — larut malam atau pagi buta — dan baru bisa dibalas berjam-jam kemudian.
+              </p>
             </div>
 
-            <div className="bg-[#F5F3EE] p-6 rounded-3xl border border-[#E2E0D8] space-y-4 flex flex-col justify-between">
-              <p className="text-sm text-[#1F2A24] leading-relaxed italic">
-                &ldquo;Pertanyaan yang sama terus tiap hari: harga berapa, ready gak, ongkir berapa.&rdquo;
-              </p>
-              <div className="pt-4 border-t border-[#E2E0D8]/60 text-xs font-bold text-[#2F6A55]">
-                — Reseller fashion online
+            <div className="bg-[#F5F3EE] p-6 md:p-8 rounded-3xl border border-[#E2E0D8] space-y-3 flex flex-col justify-start">
+              <div className="w-10 h-10 rounded-2xl bg-[#2F6A55]/10 text-[#2F6A55] flex items-center justify-center font-bold text-lg mb-1">
+                🔄
               </div>
+              <p className="text-sm text-[#1F2A24] leading-relaxed">
+                Pertanyaan yang sama terus berulang tiap hari: harga berapa, stok ada atau tidak, ongkos kirim berapa.
+              </p>
             </div>
 
-            <div className="bg-[#F5F3EE] p-6 rounded-3xl border border-[#E2E0D8] space-y-4 flex flex-col justify-between">
-              <p className="text-sm text-[#1F2A24] leading-relaxed italic">
-                &ldquo;Saya coba chatbot lain, malah jawab ngasal soal stok. Pelanggan komplain, saya yang kena.&rdquo;
-              </p>
-              <div className="pt-4 border-t border-[#E2E0D8]/60 text-xs font-bold text-[#2F6A55]">
-                — Pemilik bengkel motor
+            <div className="bg-[#F5F3EE] p-6 md:p-8 rounded-3xl border border-[#E2E0D8] space-y-3 flex flex-col justify-start">
+              <div className="w-10 h-10 rounded-2xl bg-[#2F6A55]/10 text-[#2F6A55] flex items-center justify-center font-bold text-lg mb-1">
+                ⚠️
               </div>
+              <p className="text-sm text-[#1F2A24] leading-relaxed">
+                Chatbot otomatis lain kerap memberi jawaban salah soal stok atau harga, dan pemilik toko yang harus menanggung komplain pelanggan.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 4. BAGIAN CARA KERJA */}
+      {/* 4. BAGIAN CARA KERJA (ID ANCHOR cara-kerja) */}
       <section id="cara-kerja" className="py-20 md:py-28 px-6 max-w-5xl mx-auto space-y-16">
         <div className="text-center space-y-3">
           <span className="text-xs font-bold text-[#B8863B] uppercase tracking-wider">Praktis & Cepat</span>
@@ -170,7 +129,7 @@ export default function LandingPageClient() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="bg-white p-8 rounded-3xl border border-[#E2E0D8] space-y-4 relative shadow-sm">
             <span className="text-4xl font-extrabold text-[#2F6A55]/30 font-mono">01</span>
-            <h3 className="text-lg font-bold text-[#1F2A24]">Isi info bisnismu</h3>
+            <h3 className="text-lg font-bold text-[#1F2A24]">Daftar & isi info bisnismu</h3>
             <p className="text-xs text-[#6B7570] leading-relaxed">
               Produk, harga, jam buka, kebijakan pengiriman — sekali isi, jadi acuan semua balasan.
             </p>
@@ -240,7 +199,7 @@ export default function LandingPageClient() {
         </div>
       </section>
 
-      {/* 6. BAGIAN HARGA (DINAMIS DARI DATABASE) */}
+      {/* 6. BAGIAN HARGA (HANYA 1 PAKET SINGLE PLAN) */}
       <section className="py-20 md:py-28 px-6 max-w-5xl mx-auto space-y-12">
         <div className="text-center space-y-3">
           <span className="text-xs font-bold text-[#B8863B] uppercase tracking-wider">Investasi Terjangkau</span>
@@ -249,79 +208,61 @@ export default function LandingPageClient() {
           </h2>
         </div>
 
-        {loadingPlans ? (
-          <div className="text-center py-12 text-xs text-[#6B7570]">Memuat paket harga...</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {plans.map((plan) => (
-              <div
-                key={plan.id}
-                className={`bg-white rounded-3xl p-8 border flex flex-col justify-between relative shadow-sm ${
-                  plan.isPopular ? "border-[#2F6A55] ring-2 ring-[#2F6A55]/20" : "border-[#E2E0D8]"
-                }`}
-              >
-                {plan.isPopular && (
-                  <span className="absolute -top-3.5 right-6 px-3 py-1 bg-[#2F6A55] text-white text-[10px] font-bold rounded-full uppercase tracking-wider shadow-sm">
-                    Paling Populer
-                  </span>
-                )}
+        <div className="max-w-md mx-auto">
+          <div className="bg-white rounded-3xl p-8 border border-[#2F6A55] ring-2 ring-[#2F6A55]/20 flex flex-col justify-between relative shadow-sm space-y-6">
+            <span className="absolute -top-3.5 right-6 px-3.5 py-1 bg-[#2F6A55] text-white text-[10px] font-bold rounded-full uppercase tracking-wider shadow-sm">
+              Paket Lengkap UMKM
+            </span>
 
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-2xl font-bold text-[#1F2A24]">{plan.name}</h3>
-                    <p className="text-xs text-[#6B7570] mt-1">{plan.description}</p>
-                  </div>
-
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl md:text-4xl font-extrabold text-[#1F2A24] font-mono">
-                      Rp {plan.price.toLocaleString("id-ID")}
-                    </span>
-                    <span className="text-xs text-[#6B7570]">/{plan.period}</span>
-                  </div>
-
-                  <ul className="space-y-3 pt-4 border-t border-[#E2E0D8]">
-                    {plan.features.split(",").map((feat, idx) => (
-                      <li key={idx} className="flex items-center gap-2.5 text-xs text-[#1F2A24]">
-                        <span className="text-[#2F6A55] font-bold">✓</span>
-                        <span>{feat.trim()}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="pt-8">
-                  <Link href="/daftar" className="block w-full">
-                    <Button
-                      variant={plan.isPopular ? "primary" : "secondary"}
-                      className={`w-full py-3 text-xs font-bold rounded-xl ${
-                        plan.isPopular
-                          ? "bg-[#2F6A55] text-white hover:bg-[#265746]"
-                          : "bg-transparent text-[#1F2A24] border border-[#E2E0D8] hover:border-[#2F6A55]"
-                      }`}
-                    >
-                      Pilih Paket {plan.name} →
-                    </Button>
-                  </Link>
-                </div>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-3xl font-extrabold text-[#1F2A24] font-heading">{singlePlan.name}</h3>
+                <p className="text-xs text-[#6B7570] mt-1">
+                  Seluruh fitur otomatisasi WhatsApp & rekap bisnis dalam 1 paket terjangkau.
+                </p>
               </div>
-            ))}
+
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-extrabold text-[#1F2A24] font-mono">
+                  Rp {singlePlan.price.toLocaleString("id-ID")}
+                </span>
+                <span className="text-xs text-[#6B7570]">/{singlePlan.period}</span>
+              </div>
+
+              <ul className="space-y-3 pt-4 border-t border-[#E2E0D8]">
+                {singlePlan.features.map((feat, idx) => (
+                  <li key={idx} className="flex items-center gap-2.5 text-xs text-[#1F2A24]">
+                    <span className="text-[#2F6A55] font-bold text-sm">✓</span>
+                    <span>{feat}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="pt-6">
+              <Link href="/daftar" className="block w-full">
+                <Button className="w-full py-3.5 text-sm font-bold bg-[#2F6A55] text-white rounded-xl shadow-md hover:bg-[#265746] transition-all">
+                  Daftar Sekarang →
+                </Button>
+              </Link>
+            </div>
           </div>
-        )}
+        </div>
       </section>
 
-      {/* 7. BAGIAN BANNER CTA DAFTAR */}
+      {/* 7. CALL-TO-ACTION PENUTUP */}
       <section className="py-20 md:py-28 px-6 bg-white border-t border-[#E2E0D8]">
         <div className="max-w-3xl mx-auto bg-[#2F6A55] text-white rounded-3xl p-8 md:p-12 text-center space-y-6 shadow-md">
           <h2 className="text-3xl md:text-4xl font-extrabold font-heading">
-            Mulai Beli & Aktifkan Bot Tokomu
+            Coba dulu, tanpa ribet.
           </h2>
           <p className="text-sm text-emerald-100 max-w-lg mx-auto">
-            Daftar mandiri di /daftar, pilih paket langganan, dan selesaikan pembayaran untuk mengaktifkan AI WhatsApp admin bisnismu.
+            Daftar sekarang di /daftar dan rasakan bagaimana Balas menjawab chat pelanggan toko Anda secara otomatis.
           </p>
           <div className="pt-2">
             <Link href="/daftar">
               <Button className="px-8 py-4 text-sm font-bold bg-white text-[#2F6A55] hover:bg-emerald-50 rounded-2xl shadow-lg">
-                Daftar & Beli Paket Sekarang →
+                Daftar & Coba Sekarang →
               </Button>
             </Link>
           </div>
@@ -334,17 +275,14 @@ export default function LandingPageClient() {
           <p className="text-xs text-[#6B7570]">
             © 2026 Balas. Dibuat untuk pemilik usaha yang capek bales chat sendirian.
           </p>
+
           <div className="flex items-center gap-4 text-xs font-bold text-[#2F6A55]">
-            <Link href="/cara-pakai" className="hover:underline">
-              Panduan Cara Pakai
-            </Link>
-            <span>•</span>
-            <Link href="/daftar" className="hover:underline">
-              Daftar & Beli
-            </Link>
-            <span>•</span>
             <Link href="/login" className="hover:underline">
               Masuk
+            </Link>
+            <span>•</span>
+            <Link href="/cara-pakai" className="hover:underline">
+              Cara Pakai
             </Link>
           </div>
         </div>
