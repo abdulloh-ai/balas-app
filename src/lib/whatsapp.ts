@@ -6,7 +6,7 @@ import makeWASocket, {
 import QRCode from "qrcode";
 import path from "path";
 import fs from "fs";
-import { prisma } from "@/lib/prisma";
+import { executeAIChatLogic } from "@/app/api/business/chat/route";
 
 export interface WASessionState {
   status: "DISCONNECTED" | "CONNECTING" | "QR_READY" | "CONNECTED";
@@ -59,7 +59,6 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
 
   sock.ev.on("creds.update", saveCreds);
 
-  // Return a promise that resolves when QR code is emitted or connection opens or 5s timeout
   return new Promise<WASessionState>((resolve) => {
     let resolved = false;
 
@@ -69,7 +68,7 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
         const current = sessions.get(tenantId);
         resolve(current ? current.state : initialState);
       }
-    }, 5000);
+    }, 6000);
 
     sock.ev.on("connection.update", async (update) => {
       const { connection, lastDisconnect, qr } = update;
@@ -98,14 +97,15 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
 
       if (connection === "open") {
         const userJid = sock.user?.id || "";
-        const phone = userJid.split(":")[0] || userJid.split("@")[0] || "";
+        const rawPhone = userJid.split(":")[0] || userJid.split("@")[0] || "";
+        const formattedPhone = rawPhone.startsWith("62") ? "0" + rawPhone.slice(2) : rawPhone;
 
         currentSession.state = {
           status: "CONNECTED",
           qrCodeUrl: null,
-          phoneNumber: phone,
+          phoneNumber: formattedPhone,
         };
-        console.log(`[WA Gateway ${tenantId}] 🟢 TERHUBUNG KE WHATSAPP (+${phone})!`);
+        console.log(`[WA Gateway ${tenantId}] 🟢 TERHUBUNG KE WHATSAPP TOKO (${formattedPhone})!`);
 
         if (!resolved) {
           resolved = true;
@@ -150,7 +150,8 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
           const remoteJid = msg.key.remoteJid || "";
           if (!remoteJid.endsWith("@s.whatsapp.net")) continue;
 
-          const customerPhone = remoteJid.replace("@s.whatsapp.net", "");
+          const rawPhone = remoteJid.replace("@s.whatsapp.net", "");
+          const customerPhone = rawPhone.startsWith("62") ? "0" + rawPhone.slice(2) : rawPhone;
           const textMessage =
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text ||
@@ -162,32 +163,11 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
             `[WA Gateway ${tenantId}] Chat masuk dari ${customerPhone}: "${textMessage}"`
           );
 
-          // 1. Simpan pesan pelanggan ke DB
-          await prisma.conversation.create({
-            data: {
-              tenantId,
-              customerPhone,
-              sender: "PELANGGAN",
-              message: textMessage,
-            },
-          });
+          // Panggil eksekusi AI langsung di backend Node.js
+          const aiResult = await executeAIChatLogic(tenantId, customerPhone, textMessage);
+          const replyText = aiResult.reply || "Maaf, pesan Anda sudah diterima toko.";
 
-          // 2. Panggil API AI Chat Engine internal
-          const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-          const aiResponse = await fetch(`${baseUrl}/api/business/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              message: textMessage,
-              customerPhone,
-              tenantId,
-            }),
-          });
-
-          const data = await aiResponse.json();
-          const replyText = data.reply || "Maaf, pesan Anda sudah diterima toko.";
-
-          // 3. Balas chat langsung ke WhatsApp HP pelanggan!
+          // Balas chat langsung ke WhatsApp HP pelanggan!
           await sock.sendMessage(remoteJid, { text: replyText });
           console.log(
             `[WA Gateway ${tenantId}] 🤖 AI Bot membalas ke ${customerPhone}: "${replyText}"`
