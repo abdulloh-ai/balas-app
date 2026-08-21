@@ -36,6 +36,7 @@ const PLAN_PRICES: Record<string, number> = {
   STARTER: 149000,
   PRO: 299000,
   ENTERPRISE: 699000,
+  BALAS: 199000,
 };
 
 export default function AdminDashboard() {
@@ -56,12 +57,6 @@ export default function AdminDashboard() {
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
-  const [lastCreatedOwner, setLastCreatedOwner] = useState<{
-    name: string;
-    email: string;
-    rawPassword: string;
-  } | null>(null);
-
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -77,7 +72,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetch("/api/admin/tenants");
       if (res.status === 401) {
-        router.push("/admin/login");
+        router.push("/login");
         return;
       }
 
@@ -97,9 +92,10 @@ export default function AdminDashboard() {
     fetchTenants();
   }, []);
 
+  // LOGOUT HANDLER: REDIRECT TO HOME LANDING PAGE (/)
   const handleLogout = async () => {
     await fetch("/api/admin/logout", { method: "POST" });
-    router.push("/admin/login");
+    router.push("/");
     router.refresh();
   };
 
@@ -127,7 +123,6 @@ export default function AdminDashboard() {
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg(null);
-    setLastCreatedOwner(null);
     setSubmitting(true);
 
     try {
@@ -144,7 +139,6 @@ export default function AdminDashboard() {
       }
 
       setMsg({ type: "success", text: data.message });
-      setLastCreatedOwner(data.createdOwner);
 
       setFormData({
         name: "",
@@ -169,12 +163,6 @@ export default function AdminDashboard() {
     (t) =>
       t.paymentStatus === "MENUNGGU_VERIFIKASI" ||
       t.subscriptionStatus === "MENUNGGU_VERIFIKASI"
-  );
-
-  const activeTenants = tenants.filter(
-    (t) =>
-      t.paymentStatus !== "MENUNGGU_VERIFIKASI" &&
-      t.subscriptionStatus !== "MENUNGGU_VERIFIKASI"
   );
 
   if (loading) {
@@ -361,7 +349,7 @@ export default function AdminDashboard() {
                           <td className="py-3 px-3">
                             <span className="font-bold text-[#2F6A55]">{t.subscriptionPlan}</span>
                             <div className="text-[10px] text-[#6B7570]">
-                              Rp {(PLAN_PRICES[t.subscriptionPlan] || 149000).toLocaleString("id-ID")}/bln
+                              Rp {(PLAN_PRICES[t.subscriptionPlan] || 199000).toLocaleString("id-ID")}/bln
                             </div>
                           </td>
                           <td className="py-3 px-3 text-right">
@@ -414,9 +402,7 @@ export default function AdminDashboard() {
                           onChange={(e) => setFormData({ ...formData, subscriptionPlan: e.target.value })}
                           className="w-full px-3 py-2 bg-[#F5F3EE]/60 border border-[#E2E0D8] rounded-xl text-xs text-[#1F2A24] focus:outline-none focus:border-[#2F6A55]"
                         >
-                          <option value="STARTER">STARTER (Rp 149.000 / bln)</option>
-                          <option value="PRO">PRO (Rp 299.000 / bln)</option>
-                          <option value="ENTERPRISE">ENTERPRISE (Rp 699.000 / bln)</option>
+                          <option value="BALAS">BALAS (Rp 199.000 / bln)</option>
                         </select>
                       </div>
                     </div>
@@ -506,7 +492,7 @@ export default function AdminDashboard() {
                               <td className="py-3 px-3">
                                 <span className="font-bold text-[#2F6A55]">{item.subscriptionPlan}</span>
                                 <div className="text-[10px] text-[#6B7570]">
-                                  Rp {(PLAN_PRICES[item.subscriptionPlan] || 149000).toLocaleString("id-ID")}/bln
+                                  Rp {(PLAN_PRICES[item.subscriptionPlan] || 199000).toLocaleString("id-ID")}/bln
                                 </div>
                               </td>
 

@@ -232,7 +232,7 @@ export default function BusinessOwnerDashboard() {
 
   const handleLogout = async () => {
     await fetch("/api/business/logout", { method: "POST" });
-    router.push("/dashboard/login");
+    router.push("/");
     router.refresh();
   };
 
