@@ -1,31 +1,42 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, createBusinessSession } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
-    const { businessName, name, email, password } = await request.json();
+    const { businessName, name, email, password, confirmPassword, whatsapp, planName } = await request.json();
 
-    if (!businessName || !name || !email || !password) {
+    if (!businessName || !name || !email || !password || !whatsapp) {
       return NextResponse.json({ error: "Semua kolom pendaftaran wajib diisi." }, { status: 400 });
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: "Password minimal 6 karakter." }, { status: 400 });
+    if (password.length < 8) {
+      return NextResponse.json({ error: "Password minimal 8 karakter." }, { status: 400 });
+    }
+
+    if (confirmPassword && password !== confirmPassword) {
+      return NextResponse.json({ error: "Konfirmasi password tidak cocok." }, { status: 400 });
     }
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Cek apakah email sudah terdaftar
+    // Cek apakah email sudah terdaftar sebagai BusinessOwner atau PlatformOwner
     const existingOwner = await prisma.businessOwner.findUnique({
       where: { email: cleanEmail },
     });
 
-    if (existingOwner) {
-      return NextResponse.json({ error: "Email ini sudah terdaftar. Silakan login." }, { status: 400 });
+    const existingAdmin = await prisma.platformOwner.findUnique({
+      where: { email: cleanEmail },
+    });
+
+    if (existingOwner || existingAdmin) {
+      return NextResponse.json(
+        { error: "Email ini sudah terdaftar. Silakan login di /login." },
+        { status: 400 }
+      );
     }
 
-    // Ambil Platform Owner utama (Super Admin) dari DB untuk menghubungkan Tenant baru
+    // Ambil Platform Owner utama (Super Admin)
     const admin = await prisma.platformOwner.findFirst();
 
     if (!admin) {
@@ -36,8 +47,9 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await hashPassword(password);
+    const selectedPlan = planName || "STARTER";
 
-    // Transaksi DB: Buat Tenant + BusinessOwner + Produk Contoh Bawaan
+    // Transaksi DB: Buat Tenant & BusinessOwner dengan Status MENUNGGU_VERIFIKASI
     const result = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
         data: {
@@ -46,9 +58,9 @@ export async function POST(request: Request) {
           description: `Toko online ${businessName.trim()}`,
           operatingHours: "Setiap hari 08.00 - 21.00 WIB",
           policies: "Pengiriman cepat & terpercaya",
-          subscriptionStatus: "ACTIVE",
-          subscriptionPlan: "STARTER",
-          paymentStatus: "SUDAH_BAYAR",
+          subscriptionStatus: "MENUNGGU_VERIFIKASI",
+          subscriptionPlan: selectedPlan,
+          paymentStatus: "MENUNGGU_VERIFIKASI",
         },
       });
 
@@ -58,11 +70,12 @@ export async function POST(request: Request) {
           email: cleanEmail,
           passwordHash,
           name: name.trim(),
+          phone: whatsapp.trim(),
           role: "OWNER",
         },
       });
 
-      // Tambahkan 2 Produk Contoh Bawaan agar toko langsung bisa diuji
+      // Tambahkan 2 Produk Contoh Bawaan
       await tx.product.createMany({
         data: [
           {
@@ -85,19 +98,17 @@ export async function POST(request: Request) {
       return { tenant, owner };
     });
 
-    // Buat Sesi JWT Login Otomatis
-    await createBusinessSession({
-      id: result.owner.id,
-      tenantId: result.tenant.id,
-      email: result.owner.email,
-      name: result.owner.name,
-      role: result.owner.role,
-    });
-
     return NextResponse.json({
-      message: `Pendaftaran Toko ${result.tenant.name} Berhasil!`,
-      redirectTo: "/dashboard",
-      tenantName: result.tenant.name,
+      message: "Pendaftaran berhasil! Silakan lakukan pembayaran untuk verifikasi.",
+      registration: {
+        tenantId: result.tenant.id,
+        businessName: result.tenant.name,
+        ownerName: result.owner.name,
+        email: result.owner.email,
+        whatsapp: result.owner.phone,
+        plan: selectedPlan,
+        status: "MENUNGGU_VERIFIKASI",
+      },
     });
   } catch (error) {
     console.error("Registration API Error:", error);

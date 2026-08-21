@@ -18,14 +18,6 @@ export default function LandingPageClient() {
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
 
-  // Form State Kontak Demo
-  const [name, setName] = useState("");
-  const [businessName, setBusinessName] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [formSuccess, setFormSuccess] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-
   useEffect(() => {
     fetchPlans();
   }, []);
@@ -37,7 +29,6 @@ export default function LandingPageClient() {
       if (data.plans && data.plans.length > 0) {
         setPlans(data.plans);
       } else {
-        // Fallback jika DB kosong
         setPlans([
           {
             id: "1",
@@ -68,38 +59,6 @@ export default function LandingPageClient() {
     }
   };
 
-  const handleDemoSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setFormSuccess(null);
-    setFormError(null);
-
-    try {
-      const res = await fetch("/api/demo-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, businessName, whatsapp }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setFormError(data.error || "Gagal mengirim formulir.");
-        setSubmitting(false);
-        return;
-      }
-
-      setFormSuccess(data.message || "Permintaan demo berhasil dikirim!");
-      setName("");
-      setBusinessName("");
-      setWhatsapp("");
-    } catch (err) {
-      setFormError("Terjadi kesalahan jaringan. Silakan coba lagi.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#F5F3EE] text-[#1F2A24] font-sans antialiased selection:bg-[#2F6A55] selection:text-white">
       {/* 1. NAVIGASI ATAS */}
@@ -114,11 +73,16 @@ export default function LandingPageClient() {
             </span>
           </Link>
 
-          <Link href="/login">
-            <Button className="px-6 py-2.5 text-xs font-bold bg-[#2F6A55] text-white rounded-xl hover:bg-[#265746] transition-all shadow-sm">
-              Masuk →
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/cara-pakai" className="text-xs font-semibold text-[#2F6A55] hover:underline hidden sm:inline-block mr-2">
+              📖 Cara Pakai
+            </Link>
+            <Link href="/login">
+              <Button className="px-5 py-2.5 text-xs font-bold bg-[#2F6A55] text-white rounded-xl hover:bg-[#265746] transition-all shadow-sm">
+                Masuk →
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -138,11 +102,11 @@ export default function LandingPageClient() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <a href="#kontak" className="w-full sm:w-auto">
+          <Link href="/daftar" className="w-full sm:w-auto">
             <Button className="w-full sm:w-auto px-8 py-4 text-sm font-bold bg-[#2F6A55] text-white rounded-2xl shadow-lg hover:bg-[#265746] transition-all transform hover:-translate-y-0.5">
-              Hubungi Kami untuk Coba Gratis
+              Coba Gratis Sekarang →
             </Button>
-          </a>
+          </Link>
           <a href="#cara-kerja" className="w-full sm:w-auto">
             <Button variant="secondary" className="w-full sm:w-auto px-8 py-4 text-sm font-bold bg-transparent text-[#1F2A24] border-2 border-[#1F2A24]/20 rounded-2xl hover:border-[#2F6A55] hover:text-[#2F6A55] transition-all">
               Lihat Cara Kerjanya ↓
@@ -326,16 +290,18 @@ export default function LandingPageClient() {
                 </div>
 
                 <div className="pt-8">
-                  <a href="#kontak" className="block w-full">
+                  <Link href="/daftar" className="block w-full">
                     <Button
                       variant={plan.isPopular ? "primary" : "secondary"}
                       className={`w-full py-3 text-xs font-bold rounded-xl ${
-                        plan.isPopular ? "bg-[#2F6A55] text-white hover:bg-[#265746]" : "bg-transparent text-[#1F2A24] border border-[#E2E0D8] hover:border-[#2F6A55]"
+                        plan.isPopular
+                          ? "bg-[#2F6A55] text-white hover:bg-[#265746]"
+                          : "bg-transparent text-[#1F2A24] border border-[#E2E0D8] hover:border-[#2F6A55]"
                       }`}
                     >
                       Pilih Paket {plan.name} →
                     </Button>
-                  </a>
+                  </Link>
                 </div>
               </div>
             ))}
@@ -343,75 +309,22 @@ export default function LandingPageClient() {
         )}
       </section>
 
-      {/* 7. BAGIAN KONTAK (PERMINTAAN DEMO) */}
-      <section id="kontak" className="py-20 md:py-28 px-6 bg-white border-t border-[#E2E0D8]">
-        <div className="max-w-xl mx-auto space-y-8">
-          <div className="text-center space-y-3">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-[#1F2A24] tracking-tight font-heading">
-              Coba dulu, tanpa risiko.
-            </h2>
-            <p className="text-xs text-[#6B7570]">
-              Isi data singkat di bawah. Tim kami akan menghubungi kamu lewat WhatsApp untuk mengaturkan demo gratis.
-            </p>
+      {/* 7. BAGIAN BANNER CTA DAFTAR */}
+      <section className="py-20 md:py-28 px-6 bg-white border-t border-[#E2E0D8]">
+        <div className="max-w-3xl mx-auto bg-[#2F6A55] text-white rounded-3xl p-8 md:p-12 text-center space-y-6 shadow-md">
+          <h2 className="text-3xl md:text-4xl font-extrabold font-heading">
+            Mulai Beli & Aktifkan Bot Tokomu
+          </h2>
+          <p className="text-sm text-emerald-100 max-w-lg mx-auto">
+            Daftar mandiri di /daftar, pilih paket langganan, dan selesaikan pembayaran untuk mengaktifkan AI WhatsApp admin bisnismu.
+          </p>
+          <div className="pt-2">
+            <Link href="/daftar">
+              <Button className="px-8 py-4 text-sm font-bold bg-white text-[#2F6A55] hover:bg-emerald-50 rounded-2xl shadow-lg">
+                Daftar & Beli Paket Sekarang →
+              </Button>
+            </Link>
           </div>
-
-          <form onSubmit={handleDemoSubmit} className="bg-[#F5F3EE] p-6 md:p-8 rounded-3xl border border-[#E2E0D8] space-y-4 shadow-sm">
-            {formSuccess && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 text-[#2F6A55] text-xs font-medium rounded-xl leading-relaxed animate-pulse">
-                ✅ {formSuccess}
-              </div>
-            )}
-
-            {formError && (
-              <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-xs font-medium rounded-xl leading-relaxed">
-                ⚠️ {formError}
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold text-[#1F2A24] mb-1.5">Nama Lengkap</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Contoh: Budi Santoso"
-                className="w-full px-4 py-3 text-sm bg-white border border-[#E2E0D8] rounded-xl focus:outline-none focus:border-[#2F6A55] text-[#1F2A24]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[#1F2A24] mb-1.5">Nama Bisnis / Toko</label>
-              <input
-                type="text"
-                required
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="Contoh: Warung Frozen Budi"
-                className="w-full px-4 py-3 text-sm bg-white border border-[#E2E0D8] rounded-xl focus:outline-none focus:border-[#2F6A55] text-[#1F2A24]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[#1F2A24] mb-1.5">Nomor WhatsApp</label>
-              <input
-                type="tel"
-                required
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="Contoh: 081234567890"
-                className="w-full px-4 py-3 text-sm bg-white border border-[#E2E0D8] rounded-xl focus:outline-none focus:border-[#2F6A55] text-[#1F2A24]"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-3.5 text-sm font-bold bg-[#2F6A55] text-white rounded-xl shadow-md hover:bg-[#265746] transition-all mt-2"
-            >
-              {submitting ? "Sending..." : "Kirim Permintaan Demo →"}
-            </Button>
-          </form>
         </div>
       </section>
 
@@ -422,6 +335,14 @@ export default function LandingPageClient() {
             © 2026 Balas. Dibuat untuk pemilik usaha yang capek bales chat sendirian.
           </p>
           <div className="flex items-center gap-4 text-xs font-bold text-[#2F6A55]">
+            <Link href="/cara-pakai" className="hover:underline">
+              Panduan Cara Pakai
+            </Link>
+            <span>•</span>
+            <Link href="/daftar" className="hover:underline">
+              Daftar & Beli
+            </Link>
+            <span>•</span>
             <Link href="/login" className="hover:underline">
               Masuk
             </Link>

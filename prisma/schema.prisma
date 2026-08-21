@@ -32,9 +32,9 @@ model Tenant {
   description        String?
   operatingHours     String?
   policies           String?
-  subscriptionStatus String   @default("ACTIVE") // ACTIVE, INACTIVE, TRIAL
+  subscriptionStatus String   @default("ACTIVE") // ACTIVE, INACTIVE, TRIAL, MENUNGGU_VERIFIKASI
   subscriptionPlan   String   @default("STARTER") // STARTER, PRO, ENTERPRISE
-  paymentStatus      String   @default("SUDAH_BAYAR") // SUDAH_BAYAR, BELUM_BAYAR
+  paymentStatus      String   @default("SUDAH_BAYAR") // SUDAH_BAYAR, BELUM_BAYAR, MENUNGGU_VERIFIKASI
   lastPaidAt         DateTime @default(now())
   startDate          DateTime @default(now())
   createdAt          DateTime @default(now())
@@ -59,6 +59,7 @@ model BusinessOwner {
   email        String   @unique
   passwordHash String
   name         String
+  phone        String?
   role         String   @default("OWNER") // OWNER, ADMIN
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
