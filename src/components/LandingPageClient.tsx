@@ -250,26 +250,7 @@ export default function LandingPageClient() {
         </div>
       </section>
 
-      {/* 7. CALL-TO-ACTION PENUTUP */}
-      <section className="py-20 md:py-28 px-6 bg-white border-t border-[#E2E0D8]">
-        <div className="max-w-3xl mx-auto bg-[#2F6A55] text-white rounded-3xl p-8 md:p-12 text-center space-y-6 shadow-md">
-          <h2 className="text-3xl md:text-4xl font-extrabold font-heading">
-            Coba dulu, tanpa ribet.
-          </h2>
-          <p className="text-sm text-emerald-100 max-w-lg mx-auto">
-            Daftar sekarang di /daftar dan rasakan bagaimana Balas menjawab chat pelanggan toko Anda secara otomatis.
-          </p>
-          <div className="pt-2">
-            <Link href="/daftar">
-              <Button className="px-8 py-4 text-sm font-bold bg-white text-[#2F6A55] hover:bg-emerald-50 rounded-2xl shadow-lg">
-                Daftar & Coba Sekarang →
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* 8. FOOTER */}
+      {/* 7. FOOTER */}
       <footer className="bg-[#F5F3EE] py-12 px-6 border-t border-[#E2E0D8]">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
           <p className="text-xs text-[#6B7570]">
