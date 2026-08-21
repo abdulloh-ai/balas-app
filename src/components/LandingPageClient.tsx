@@ -199,7 +199,7 @@ export default function LandingPageClient() {
         </div>
       </section>
 
-      {/* 6. BAGIAN HARGA (HANYA 1 PAKET SINGLE PLAN) */}
+      {/* 6. BAGIAN HARGA (HANYA 1 PAKET SINGLE PLAN "Balas" Rp 199.000/bulan) */}
       <section className="py-20 md:py-28 px-6 max-w-5xl mx-auto space-y-12">
         <div className="text-center space-y-3">
           <span className="text-xs font-bold text-[#B8863B] uppercase tracking-wider">Investasi Terjangkau</span>
