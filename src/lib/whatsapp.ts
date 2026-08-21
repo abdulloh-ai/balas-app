@@ -21,7 +21,6 @@ const sessions: Map<string, { socket: WASocket; state: WASessionState }> = new M
 export async function getWASessionState(tenantId: string): Promise<WASessionState> {
   const session = sessions.get(tenantId);
   if (!session) {
-    // Cek apakah ada auth state tersimpan
     const sessionDir = path.join(process.cwd(), "whatsapp_sessions", tenantId);
     if (fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).length > 0) {
       return { status: "DISCONNECTED", qrCodeUrl: null, phoneNumber: null };
@@ -32,7 +31,6 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
 }
 
 export async function initWASession(tenantId: string): Promise<WASessionState> {
-  // Jika sudah connected, kembalikan state
   const existing = sessions.get(tenantId);
   if (existing && existing.state.status === "CONNECTED") {
     return existing.state;
@@ -61,123 +59,145 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    const currentSession = sessions.get(tenantId);
-    if (!currentSession) return;
+  // Return a promise that resolves when QR code is emitted or connection opens or 5s timeout
+  return new Promise<WASessionState>((resolve) => {
+    let resolved = false;
 
-    if (qr) {
-      try {
-        const qrDataUrl = await QRCode.toDataURL(qr);
-        currentSession.state = {
-          status: "QR_READY",
-          qrCodeUrl: qrDataUrl,
-          phoneNumber: null,
-        };
-        console.log(`[WA Gateway ${tenantId}] Kode QR Siap di-scan!`);
-      } catch (err) {
-        console.error("QR Code Error:", err);
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        const current = sessions.get(tenantId);
+        resolve(current ? current.state : initialState);
       }
-    }
+    }, 5000);
 
-    if (connection === "open") {
-      const userJid = sock.user?.id || "";
-      const phone = userJid.split(":")[0] || userJid.split("@")[0] || "";
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+      const currentSession = sessions.get(tenantId);
+      if (!currentSession) return;
 
-      currentSession.state = {
-        status: "CONNECTED",
-        qrCodeUrl: null,
-        phoneNumber: phone,
-      };
-      console.log(`[WA Gateway ${tenantId}] 🟢 TERHUBUNG KE WHATSAPP (+${phone})!`);
-    }
+      if (qr) {
+        try {
+          const qrDataUrl = await QRCode.toDataURL(qr);
+          currentSession.state = {
+            status: "QR_READY",
+            qrCodeUrl: qrDataUrl,
+            phoneNumber: null,
+          };
+          console.log(`[WA Gateway ${tenantId}] Kode QR Siap di-scan!`);
 
-    if (connection === "close") {
-      const shouldReconnect =
-        (lastDisconnect?.error as any)?.output?.statusCode !== DisconnectReason.loggedOut;
-
-      console.log(
-        `[WA Gateway ${tenantId}] Connection closed. Reconnecting:`,
-        shouldReconnect
-      );
-
-      if (shouldReconnect) {
-        currentSession.state.status = "CONNECTING";
-        initWASession(tenantId);
-      } else {
-        currentSession.state = {
-          status: "DISCONNECTED",
-          qrCodeUrl: null,
-          phoneNumber: null,
-        };
-        // Hapus folder kredensial jika logged out
-        if (fs.existsSync(sessionDir)) {
-          fs.rmSync(sessionDir, { recursive: true, force: true });
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            resolve(currentSession.state);
+          }
+        } catch (err) {
+          console.error("QR Code Error:", err);
         }
       }
-    }
-  });
 
-  // MENDENGARKAN CHAT MASUK DARI WHATSAPP HP ASLI PELANGGAN
-  sock.ev.on("messages.upsert", async (m) => {
-    try {
-      if (m.type !== "notify") return;
+      if (connection === "open") {
+        const userJid = sock.user?.id || "";
+        const phone = userJid.split(":")[0] || userJid.split("@")[0] || "";
 
-      for (const msg of m.messages) {
-        if (!msg.message || msg.key.fromMe) continue;
+        currentSession.state = {
+          status: "CONNECTED",
+          qrCodeUrl: null,
+          phoneNumber: phone,
+        };
+        console.log(`[WA Gateway ${tenantId}] 🟢 TERHUBUNG KE WHATSAPP (+${phone})!`);
 
-        const remoteJid = msg.key.remoteJid || "";
-        if (!remoteJid.endsWith("@s.whatsapp.net")) continue;
-
-        const customerPhone = remoteJid.replace("@s.whatsapp.net", "");
-        const textMessage =
-          msg.message.conversation ||
-          msg.message.extendedTextMessage?.text ||
-          "";
-
-        if (!textMessage.trim()) continue;
-
-        console.log(
-          `[WA Gateway ${tenantId}] Chat masuk dari ${customerPhone}: "${textMessage}"`
-        );
-
-        // 1. Simpan pesan pelanggan ke DB
-        await prisma.conversation.create({
-          data: {
-            tenantId,
-            customerPhone,
-            sender: "PELANGGAN",
-            message: textMessage,
-          },
-        });
-
-        // 2. Panggil API AI Chat Engine internal
-        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-        const aiResponse = await fetch(`${baseUrl}/api/business/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: textMessage,
-            customerPhone,
-            tenantId,
-          }),
-        });
-
-        const data = await aiResponse.json();
-        const replyText = data.reply || "Maaf, pesan Anda sudah diterima toko.";
-
-        // 3. Balas chat langsung ke WhatsApp HP pelanggan!
-        await sock.sendMessage(remoteJid, { text: replyText });
-        console.log(
-          `[WA Gateway ${tenantId}] 🤖 AI Bot membalas ke ${customerPhone}: "${replyText}"`
-        );
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          resolve(currentSession.state);
+        }
       }
-    } catch (err) {
-      console.error(`[WA Gateway ${tenantId}] Message Upsert Error:`, err);
-    }
-  });
 
-  return initialState;
+      if (connection === "close") {
+        const shouldReconnect =
+          (lastDisconnect?.error as any)?.output?.statusCode !== DisconnectReason.loggedOut;
+
+        console.log(
+          `[WA Gateway ${tenantId}] Connection closed. Reconnecting:`,
+          shouldReconnect
+        );
+
+        if (shouldReconnect) {
+          currentSession.state.status = "CONNECTING";
+          initWASession(tenantId);
+        } else {
+          currentSession.state = {
+            status: "DISCONNECTED",
+            qrCodeUrl: null,
+            phoneNumber: null,
+          };
+          if (fs.existsSync(sessionDir)) {
+            fs.rmSync(sessionDir, { recursive: true, force: true });
+          }
+        }
+      }
+    });
+
+    // MENDENGARKAN CHAT MASUK DARI WHATSAPP HP ASLI PELANGGAN
+    sock.ev.on("messages.upsert", async (m) => {
+      try {
+        if (m.type !== "notify") return;
+
+        for (const msg of m.messages) {
+          if (!msg.message || msg.key.fromMe) continue;
+
+          const remoteJid = msg.key.remoteJid || "";
+          if (!remoteJid.endsWith("@s.whatsapp.net")) continue;
+
+          const customerPhone = remoteJid.replace("@s.whatsapp.net", "");
+          const textMessage =
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text ||
+            "";
+
+          if (!textMessage.trim()) continue;
+
+          console.log(
+            `[WA Gateway ${tenantId}] Chat masuk dari ${customerPhone}: "${textMessage}"`
+          );
+
+          // 1. Simpan pesan pelanggan ke DB
+          await prisma.conversation.create({
+            data: {
+              tenantId,
+              customerPhone,
+              sender: "PELANGGAN",
+              message: textMessage,
+            },
+          });
+
+          // 2. Panggil API AI Chat Engine internal
+          const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+          const aiResponse = await fetch(`${baseUrl}/api/business/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: textMessage,
+              customerPhone,
+              tenantId,
+            }),
+          });
+
+          const data = await aiResponse.json();
+          const replyText = data.reply || "Maaf, pesan Anda sudah diterima toko.";
+
+          // 3. Balas chat langsung ke WhatsApp HP pelanggan!
+          await sock.sendMessage(remoteJid, { text: replyText });
+          console.log(
+            `[WA Gateway ${tenantId}] 🤖 AI Bot membalas ke ${customerPhone}: "${replyText}"`
+          );
+        }
+      } catch (err) {
+        console.error(`[WA Gateway ${tenantId}] Message Upsert Error:`, err);
+      }
+    });
+  });
 }
 
 export async function disconnectWASession(tenantId: string): Promise<WASessionState> {
