@@ -309,6 +309,17 @@ export default function BusinessOwnerDashboard() {
     return () => clearInterval(interval);
   }, [activeTab, waState.status]);
 
+  // Polling riwayat chat saat tab chat aktif
+  useEffect(() => {
+    let interval: any;
+    if (activeTab === "chat") {
+      interval = setInterval(() => {
+        fetchChatHistory();
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;

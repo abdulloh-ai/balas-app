@@ -148,10 +148,11 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
           if (!msg.message || msg.key.fromMe) continue;
 
           const remoteJid = msg.key.remoteJid || "";
-          if (!remoteJid.endsWith("@s.whatsapp.net")) continue;
+          if (!remoteJid || remoteJid.endsWith("@g.us")) continue;
 
-          const rawPhone = remoteJid.replace("@s.whatsapp.net", "");
-          const customerPhone = rawPhone.startsWith("62") ? "0" + rawPhone.slice(2) : rawPhone;
+          const cleanJid = remoteJid.split("@")[0].split(":")[0];
+          if (!cleanJid || isNaN(Number(cleanJid))) continue;
+          const customerPhone = cleanJid.startsWith("62") ? "0" + cleanJid.slice(2) : cleanJid;
           const textMessage =
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text ||
