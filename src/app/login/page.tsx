@@ -58,10 +58,6 @@ export default function LoginPage() {
             <p className="text-xs text-[#6B7570] font-medium mt-0.5">Admin AI WhatsApp UMKM</p>
           </div>
         </Link>
-
-        <Link href="/cara-pakai" className="text-xs font-semibold text-[#2F6A55] hover:underline">
-          📖 Panduan Penggunaan
-        </Link>
       </header>
 
       {/* Main Single Form Login Card */}

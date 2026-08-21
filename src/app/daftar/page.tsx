@@ -54,22 +54,14 @@ export default function DaftarPage() {
         setPlans([
           {
             id: "1",
-            name: "Starter",
-            price: 149000,
+            name: "Balas",
+            price: 199000,
             period: "bulan",
-            description: "Cocok untuk warung & toko online mikro yang baru mulai.",
+            description: "Seluruh fitur otomatisasi WhatsApp & rekap bisnis dalam 1 paket terjangkau.",
             features: "1 Nomor WhatsApp, Chat Tanpa Batas, Rekap Pesanan Otomatis",
           },
-          {
-            id: "2",
-            name: "Pro",
-            price: 299000,
-            period: "bulan",
-            description: "Untuk toko online aktif dengan volume chat harian tinggi.",
-            features: "2 Nomor WhatsApp, Chat Tanpa Batas, Rekap Laporan PDF, Prioritas Support",
-          },
         ]);
-        setSelectedPlan("Starter");
+        setSelectedPlan("Balas");
       }
     } catch (err) {
       console.error("Fetch plans error:", err);
@@ -232,9 +224,6 @@ export default function DaftarPage() {
         </Link>
 
         <div className="flex items-center gap-4 text-xs font-bold">
-          <Link href="/cara-pakai" className="text-[#2F6A55] hover:underline">
-            📖 Cara Pakai
-          </Link>
           <Link href="/login" className="text-[#1F2A24] hover:underline">
             Sudah Ada Akun? Login →
           </Link>
@@ -268,48 +257,27 @@ export default function DaftarPage() {
               <span className="w-6 h-6 rounded-full bg-[#2F6A55] text-white text-xs flex items-center justify-center">
                 1
               </span>
-              Pilih Paket Berlangganan
+              Paket Berlangganan
             </h2>
 
-            {loadingPlans ? (
-              <div className="text-xs text-[#6B7570] py-4 text-center">Memuat paket...</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                {plans.map((p) => {
-                  const isSelected = selectedPlan.toUpperCase() === p.name.toUpperCase();
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedPlan(p.name)}
-                      className={`p-5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between space-y-3 ${
-                        isSelected
-                          ? "border-[#2F6A55] bg-[#2F6A55]/5 ring-2 ring-[#2F6A55]/30"
-                          : "border-[#E2E0D8] bg-[#F5F3EE]/40 hover:border-[#2F6A55]/40"
-                      }`}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-base text-[#1F2A24]">{p.name}</span>
-                          {isSelected && (
-                            <span className="px-2 py-0.5 bg-[#2F6A55] text-white text-[10px] font-bold rounded-full">
-                              ✓ Dipilih
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-[#6B7570]">{p.description}</p>
-                      </div>
-
-                      <div className="pt-2 border-t border-[#E2E0D8]">
-                        <span className="text-xl font-extrabold text-[#1F2A24] font-mono">
-                          Rp {p.price.toLocaleString("id-ID")}
-                        </span>
-                        <span className="text-[11px] text-[#6B7570]"> /{p.period}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+            <div className="p-5 rounded-2xl border border-[#2F6A55] bg-[#2F6A55]/5 ring-2 ring-[#2F6A55]/30 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-base text-[#1F2A24]">Balas</span>
+                <span className="px-2.5 py-0.5 bg-[#2F6A55] text-white text-[10px] font-bold rounded-full">
+                  Paket Lengkap UMKM
+                </span>
               </div>
-            )}
+              <p className="text-xs text-[#6B7570]">
+                Seluruh fitur otomatisasi WhatsApp & rekap bisnis dalam 1 paket terjangkau.
+              </p>
+
+              <div className="pt-2 border-t border-[#E2E0D8]">
+                <span className="text-xl font-extrabold text-[#1F2A24] font-mono">
+                  Rp 199.000
+                </span>
+                <span className="text-[11px] text-[#6B7570]"> /bulan</span>
+              </div>
+            </div>
           </div>
 
           {/* STEP 2: ISI DATA DIRI & TOKO */}

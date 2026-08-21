@@ -33,9 +33,6 @@ export default function LandingPageClient() {
           </Link>
 
           <div className="flex items-center gap-3">
-            <Link href="/cara-pakai" className="text-xs font-semibold text-[#2F6A55] hover:underline hidden sm:inline-block mr-2">
-              📖 Cara Pakai
-            </Link>
             <Link href="/login">
               <Button className="px-5 py-2.5 text-xs font-bold bg-[#2F6A55] text-white rounded-xl hover:bg-[#265746] transition-all shadow-sm">
                 Masuk →
@@ -260,10 +257,6 @@ export default function LandingPageClient() {
           <div className="flex items-center gap-4 text-xs font-bold text-[#2F6A55]">
             <Link href="/login" className="hover:underline">
               Masuk
-            </Link>
-            <span>•</span>
-            <Link href="/cara-pakai" className="hover:underline">
-              Cara Pakai
             </Link>
           </div>
         </div>
