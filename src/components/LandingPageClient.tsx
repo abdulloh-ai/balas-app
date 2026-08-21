@@ -64,9 +64,9 @@ export default function LandingPageClient() {
             </Button>
           </Link>
           <a href="#cara-kerja" className="w-full sm:w-auto">
-            <Button variant="secondary" className="w-full sm:w-auto px-8 py-4 text-sm font-bold bg-transparent text-[#1F2A24] border-2 border-[#1F2A24]/20 rounded-2xl hover:border-[#2F6A55] hover:text-[#2F6A55] transition-all">
+            <button className="w-full sm:w-auto px-8 py-4 text-sm font-bold bg-[#E8E6DF] text-[#1F2A24] border-2 border-[#1F2A24] rounded-2xl hover:bg-[#2F6A55] hover:text-white hover:border-[#2F6A55] transition-all shadow-xs">
               Lihat Cara Kerjanya ↓
-            </Button>
+            </button>
           </a>
         </div>
       </section>
