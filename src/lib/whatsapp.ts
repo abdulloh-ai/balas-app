@@ -6,7 +6,7 @@ import makeWASocket, {
 import QRCode from "qrcode";
 import path from "path";
 import fs from "fs";
-import { executeAIChatLogic } from "@/app/api/business/chat/route";
+import { executeAIChatLogic } from "@/lib/ai-engine";
 
 export interface WASessionState {
   status: "DISCONNECTED" | "CONNECTING" | "QR_READY" | "CONNECTED";
