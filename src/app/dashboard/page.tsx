@@ -71,9 +71,19 @@ interface ChatMessage {
   createdAt: string;
 }
 
+interface WASessionState {
+  status: "DISCONNECTED" | "CONNECTING" | "QR_READY" | "CONNECTED";
+  qrCodeUrl: string | null;
+  phoneNumber: string | null;
+  error?: string | null;
+}
+
 export default function BusinessOwnerDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"laporan" | "produk" | "pesanan" | "eskalasi" | "chat" | "info">("laporan");
+  const [activeTab, setActiveTab] = useState<
+    "laporan" | "produk" | "pesanan" | "eskalasi" | "chat" | "wa" | "info"
+  >("laporan");
+
   const [user, setUser] = useState<{ name: string; email: string; tenantId: string } | null>(null);
   const [tenant, setTenant] = useState<TenantProfile | null>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -91,6 +101,14 @@ export default function BusinessOwnerDashboard() {
     lowStockThreshold: 5,
     lowStockProducts: [],
   });
+
+  // WA Gateway State
+  const [waState, setWaState] = useState<WASessionState>({
+    status: "DISCONNECTED",
+    qrCodeUrl: null,
+    phoneNumber: null,
+  });
+  const [waConnecting, setWaConnecting] = useState(false);
 
   // Chat State Multi-Customer Inbox
   const [conversations, setConversations] = useState<ChatMessage[]>([]);
@@ -217,6 +235,51 @@ export default function BusinessOwnerDashboard() {
     }
   };
 
+  const fetchWAStatus = async () => {
+    try {
+      const res = await fetch("/api/business/wa-status");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) {
+          setWaState(data.state);
+        }
+      }
+    } catch (err) {
+      console.error("Fetch WA status error:", err);
+    }
+  };
+
+  const handleConnectWA = async () => {
+    setWaConnecting(true);
+    try {
+      const res = await fetch("/api/business/wa-connect", { method: "POST" });
+      const data = await res.json();
+      if (data.state) {
+        setWaState(data.state);
+      }
+    } catch (err) {
+      console.error("Connect WA error:", err);
+    } finally {
+      setWaConnecting(false);
+    }
+  };
+
+  const handleDisconnectWA = async () => {
+    if (!confirm("Apakah Anda yakin ingin memutuskan sambungan WA HP toko Anda?")) return;
+    setWaConnecting(true);
+    try {
+      const res = await fetch("/api/business/wa-disconnect", { method: "POST" });
+      const data = await res.json();
+      if (data.state) {
+        setWaState(data.state);
+      }
+    } catch (err) {
+      console.error("Disconnect WA error:", err);
+    } finally {
+      setWaConnecting(false);
+    }
+  };
+
   useEffect(() => {
     fetchProfileData();
     fetchProductsData();
@@ -224,6 +287,7 @@ export default function BusinessOwnerDashboard() {
     fetchChatHistory();
     fetchOrdersData();
     fetchEscalationsData();
+    fetchWAStatus();
   }, []);
 
   useEffect(() => {
@@ -231,7 +295,19 @@ export default function BusinessOwnerDashboard() {
     if (activeTab === "chat") fetchChatHistory();
     if (activeTab === "pesanan") fetchOrdersData();
     if (activeTab === "eskalasi") fetchEscalationsData();
+    if (activeTab === "wa") fetchWAStatus();
   }, [activeTab, reportPeriod]);
+
+  // Polling status WA saat tab WA aktif
+  useEffect(() => {
+    let interval: any;
+    if (activeTab === "wa" || waState.status === "QR_READY" || waState.status === "CONNECTING") {
+      interval = setInterval(() => {
+        fetchWAStatus();
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [activeTab, waState.status]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -413,7 +489,6 @@ export default function BusinessOwnerDashboard() {
 
   const pendingEscalationsCount = escalations.filter((e) => e.status === "BELUM_SELESAI").length;
 
-  // MULTI-CUSTOMER GROUPING LOGIC
   const uniqueCustomerPhones = Array.from(new Set(conversations.map((c) => c.customerPhone)));
   if (!uniqueCustomerPhones.includes("081234567890")) {
     uniqueCustomerPhones.unshift("081234567890");
@@ -511,6 +586,27 @@ export default function BusinessOwnerDashboard() {
           </button>
 
           <button
+            onClick={() => setActiveTab("wa")}
+            className={`pb-3 px-1 text-xs sm:text-sm font-bold transition-all whitespace-nowrap relative flex items-center gap-1.5 ${
+              activeTab === "wa" ? "text-[#2F6A55]" : "text-[#6B7570] hover:text-[#1F2A24]"
+            }`}
+          >
+            <span>📲 Hubungkan WA (Scan QR)</span>
+            <span
+              className={`px-2 py-0.2 text-[9px] font-extrabold rounded-full ${
+                waState.status === "CONNECTED"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {waState.status === "CONNECTED" ? "CONNECTED" : "SCAN QR"}
+            </span>
+            {activeTab === "wa" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2F6A55] rounded-full"></span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab("produk")}
             className={`pb-3 px-1 text-xs sm:text-sm font-bold transition-all whitespace-nowrap relative ${
               activeTab === "produk" ? "text-[#2F6A55]" : "text-[#6B7570] hover:text-[#1F2A24]"
@@ -557,7 +653,7 @@ export default function BusinessOwnerDashboard() {
               activeTab === "chat" ? "text-[#2F6A55]" : "text-[#6B7570] hover:text-[#1F2A24]"
             }`}
           >
-            💬 WhatsApp Live Inbox & Simulasi ({uniqueCustomerPhones.length})
+            💬 Live Inbox & Simulasi ({uniqueCustomerPhones.length})
             {activeTab === "chat" && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2F6A55] rounded-full"></span>
             )}
@@ -575,6 +671,111 @@ export default function BusinessOwnerDashboard() {
             )}
           </button>
         </div>
+
+        {/* TAB REAL WHATSAPP WEB BAILYES SCANNER */}
+        {activeTab === "wa" && (
+          <div className="max-w-2xl mx-auto space-y-6">
+            <Card
+              title="📲 Hubungkan WhatsApp Toko Fisik (Baileys Scanner)"
+              subtitle="Sambungkan nomor HP WhatsApp toko Anda 100% aman via Scan Kode QR"
+            >
+              <div className="space-y-6 text-center py-4">
+                {waState.status === "CONNECTED" && (
+                  <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-3xl space-y-4 text-emerald-900">
+                    <div className="w-16 h-16 rounded-full bg-emerald-100 text-[#2F6A55] flex items-center justify-center font-bold text-3xl mx-auto">
+                      🟢
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-extrabold text-[#1F2A24]">
+                        WhatsApp Toko Berhasil Terhubung!
+                      </h3>
+                      <p className="text-xs font-mono font-bold text-[#2F6A55] text-base">
+                        Nomor HP: +{waState.phoneNumber || "628xxxxxxxx"}
+                      </p>
+                      <p className="text-xs text-[#6B7570] max-w-sm mx-auto pt-1">
+                        AI Bot Balas kini aktif membalas seluruh chat pelanggan yang masuk ke nomor WhatsApp HP toko ini secara otomatis 24/7!
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="danger"
+                      onClick={handleDisconnectWA}
+                      disabled={waConnecting}
+                      className="px-6 py-2.5 text-xs font-bold rounded-xl"
+                    >
+                      {waConnecting ? "Memutuskan..." : "🔌 Putuskan Sambungan WA"}
+                    </Button>
+                  </div>
+                )}
+
+                {waState.status === "QR_READY" && waState.qrCodeUrl && (
+                  <div className="p-6 bg-white rounded-3xl border border-[#2F6A55] ring-2 ring-[#2F6A55]/20 space-y-4 text-center">
+                    <span className="px-3.5 py-1 bg-[#2F6A55]/10 text-[#2F6A55] text-xs font-bold rounded-full">
+                      ✨ Kode QR WhatsApp Siap Di-scan
+                    </span>
+
+                    <div className="w-64 h-64 mx-auto p-3 bg-white rounded-2xl border border-[#E2E0D8] shadow-md flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={waState.qrCodeUrl}
+                        alt="Kode QR WhatsApp Baileys"
+                        className="w-full h-full object-contain rounded-xl"
+                      />
+                    </div>
+
+                    <div className="bg-[#F5F3EE] p-4 rounded-2xl border border-[#E2E0D8] text-left text-xs space-y-2">
+                      <p className="font-bold text-[#1F2A24]">Langkah Scan dari HP Anda:</p>
+                      <ol className="list-decimal list-inside text-[#6B7570] space-y-1">
+                        <li>Buka aplikasi WhatsApp di HP toko Anda</li>
+                        <li>Klik menu Opsi (titik 3) ➔ pilih <strong>Perangkat Tertaut (Linked Devices)</strong></li>
+                        <li>Klik <strong>Tautkan Perangkat (Link a Device)</strong></li>
+                        <li>Arahkan kamera HP ke Kode QR di atas layar ini</li>
+                      </ol>
+                    </div>
+
+                    <p className="text-[11px] text-[#6B7570] animate-pulse">
+                      ⏳ Menunggu kamera HP meng-scan kode QR... (Status ter-refresh otomatis)
+                    </p>
+                  </div>
+                )}
+
+                {waState.status === "CONNECTING" && (
+                  <div className="p-10 bg-white rounded-3xl border border-[#E2E0D8] text-center space-y-4">
+                    <div className="w-12 h-12 border-4 border-[#2F6A55] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="text-xs font-bold text-[#1F2A24]">
+                      Sedang Membuat Kode QR & Menghubungkan ke WhatsApp Server...
+                    </p>
+                  </div>
+                )}
+
+                {waState.status === "DISCONNECTED" && (
+                  <div className="p-8 bg-white rounded-3xl border border-[#E2E0D8] text-center space-y-6">
+                    <div className="w-16 h-16 rounded-3xl bg-[#2F6A55]/10 text-[#2F6A55] flex items-center justify-center font-bold text-3xl mx-auto">
+                      📲
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-extrabold text-[#1F2A24]">
+                        WhatsApp HP Toko Belum Terhubung
+                      </h3>
+                      <p className="text-xs text-[#6B7570] max-w-sm mx-auto">
+                        Klik tombol di bawah untuk memunculkan Kode QR WhatsApp Baileys dan mulai menyambungkan HP toko Anda.
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="primary"
+                      onClick={handleConnectWA}
+                      disabled={waConnecting}
+                      className="px-8 py-3.5 text-xs font-bold bg-[#2F6A55] text-white rounded-xl shadow-md hover:bg-[#265746]"
+                    >
+                      {waConnecting ? "Generasi Kode QR..." : "📲 Generasikan Kode QR WA Toko"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* TAB 1: LAPORAN BISNIS */}
         {activeTab === "laporan" && (
