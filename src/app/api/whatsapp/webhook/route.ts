@@ -86,8 +86,8 @@ export async function POST(request: Request) {
       where: { id: tenant.id },
       data: {
         waStatus: "CONNECTED",
-        waPhoneNumber: devicePhone || tenant.waPhoneNumber || "Active",
-      },
+        waPhoneNumber: devicePhone || (tenant as any).waPhoneNumber || "Active",
+      } as any,
     });
 
     console.log(

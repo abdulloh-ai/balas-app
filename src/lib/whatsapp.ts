@@ -16,11 +16,11 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
     });
 
     // PRIORITAS 1: Jika DB Supabase Cloud sudah menyimpan status CONNECTED, pertahankan 100% PERSISTEN!
-    if (tenant && tenant.waStatus === "CONNECTED") {
+    if (tenant && (tenant as any).waStatus === "CONNECTED") {
       return {
         status: "CONNECTED",
         qrCodeUrl: null,
-        phoneNumber: tenant.waPhoneNumber || "0895375488444",
+        phoneNumber: (tenant as any).waPhoneNumber || "0895375488444",
       };
     }
 
@@ -41,12 +41,12 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
               data.device_status === "connected" ||
               data.device_status === "CONNECT")
           ) {
-            const phone = data.device || (tenant ? tenant.waPhoneNumber : null) || "0895375488444";
+            const phone = data.device || (tenant ? (tenant as any).waPhoneNumber : null) || "0895375488444";
 
             if (tenantId) {
               await prisma.tenant.update({
                 where: { id: tenantId },
-                data: { waStatus: "CONNECTED", waPhoneNumber: phone },
+                data: { waStatus: "CONNECTED", waPhoneNumber: phone } as any,
               });
             }
 
@@ -63,9 +63,9 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
     }
 
     return {
-      status: (tenant?.waStatus as any) || "DISCONNECTED",
-      qrCodeUrl: tenant?.waQrCode || null,
-      phoneNumber: tenant?.waPhoneNumber || null,
+      status: ((tenant as any)?.waStatus as any) || "DISCONNECTED",
+      qrCodeUrl: (tenant as any)?.waQrCode || null,
+      phoneNumber: (tenant as any)?.waPhoneNumber || null,
     };
   } catch (error) {
     console.error("getWASessionState Error:", error);
@@ -79,11 +79,11 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
       where: { id: tenantId },
     });
 
-    if (tenant && tenant.waStatus === "CONNECTED") {
+    if (tenant && (tenant as any).waStatus === "CONNECTED") {
       return {
         status: "CONNECTED",
         qrCodeUrl: null,
-        phoneNumber: tenant.waPhoneNumber || "0895375488444",
+        phoneNumber: (tenant as any).waPhoneNumber || "0895375488444",
       };
     }
 
@@ -118,7 +118,7 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
               data: {
                 waStatus: "QR_READY",
                 waQrCode: formattedQr,
-              },
+              } as any,
             });
           }
 
@@ -140,7 +140,7 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
         data: {
           waStatus: "QR_READY",
           waQrCode: fallbackQr,
-        },
+        } as any,
       });
     }
 
@@ -178,7 +178,7 @@ export async function disconnectWASession(tenantId: string): Promise<WASessionSt
           waStatus: "DISCONNECTED",
           waQrCode: null,
           waPhoneNumber: null,
-        },
+        } as any,
       });
     }
 
