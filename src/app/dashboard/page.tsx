@@ -724,7 +724,7 @@ export default function BusinessOwnerDashboard() {
                   </div>
                 )}
 
-                {waState.status === "QR_READY" && waState.qrCodeUrl && (
+                {(waState.status === "QR_READY" || (waState.qrCodeUrl && waState.status !== "CONNECTED")) && (
                   <div className="p-6 bg-white rounded-3xl border border-[#2F6A55] ring-2 ring-[#2F6A55]/20 space-y-4 text-center">
                     <span className="px-3.5 py-1 bg-[#2F6A55]/10 text-[#2F6A55] text-xs font-bold rounded-full">
                       ✨ Kode QR WhatsApp Siap Di-scan
@@ -733,8 +733,14 @@ export default function BusinessOwnerDashboard() {
                     <div className="w-64 h-64 mx-auto p-3 bg-white rounded-2xl border border-[#E2E0D8] shadow-md flex items-center justify-center">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={waState.qrCodeUrl}
-                        alt="Kode QR WhatsApp Baileys"
+                        src={
+                          waState.qrCodeUrl && (waState.qrCodeUrl.startsWith("http") || waState.qrCodeUrl.startsWith("data:image"))
+                            ? waState.qrCodeUrl
+                            : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+                                waState.qrCodeUrl || "https://fonnte.com"
+                              )}`
+                        }
+                        alt="Kode QR WhatsApp Toko"
                         className="w-full h-full object-contain rounded-xl"
                       />
                     </div>
