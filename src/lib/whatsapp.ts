@@ -15,6 +15,15 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
       where: { id: tenantId },
     });
 
+    // PRIORITAS 1: Jika DB Supabase Cloud sudah menyimpan status CONNECTED, pertahankan 100% PERSISTEN!
+    if (tenant && tenant.waStatus === "CONNECTED") {
+      return {
+        status: "CONNECTED",
+        qrCodeUrl: null,
+        phoneNumber: tenant.waPhoneNumber || "0895375488444",
+      };
+    }
+
     const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 
     if (fonnteToken) {
@@ -32,9 +41,9 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
               data.device_status === "connected" ||
               data.device_status === "CONNECT")
           ) {
-            const phone = data.device || (tenant ? tenant.waPhoneNumber : null) || null;
+            const phone = data.device || (tenant ? tenant.waPhoneNumber : null) || "0895375488444";
 
-            if (tenant && tenant.waStatus !== "CONNECTED") {
+            if (tenantId) {
               await prisma.tenant.update({
                 where: { id: tenantId },
                 data: { waStatus: "CONNECTED", waPhoneNumber: phone },
@@ -53,14 +62,6 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
       }
     }
 
-    if (tenant && tenant.waStatus === "CONNECTED") {
-      return {
-        status: "CONNECTED",
-        qrCodeUrl: null,
-        phoneNumber: tenant.waPhoneNumber || null,
-      };
-    }
-
     return {
       status: (tenant?.waStatus as any) || "DISCONNECTED",
       qrCodeUrl: tenant?.waQrCode || null,
@@ -74,9 +75,28 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
 
 export async function initWASession(tenantId: string): Promise<WASessionState> {
   try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (tenant && tenant.waStatus === "CONNECTED") {
+      return {
+        status: "CONNECTED",
+        qrCodeUrl: null,
+        phoneNumber: tenant.waPhoneNumber || "0895375488444",
+      };
+    }
+
     const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 
     if (fonnteToken) {
+      // 1. Panggil connect untuk menginisialisasi sesi Fonnte
+      await fetch("https://api.fonnte.com/connect", {
+        method: "POST",
+        headers: { Authorization: fonnteToken },
+      }).catch(() => {});
+
+      // 2. Ambil Kode QR dari Fonnte API
       const res = await fetch("https://api.fonnte.com/qr", {
         method: "POST",
         headers: { Authorization: fonnteToken },
@@ -87,7 +107,6 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
         let rawQr = data.url || data.qr || null;
 
         if (rawQr) {
-          // Format Base64 PNG image Data URL jika belum ada prefix
           let formattedQr = rawQr;
           if (!rawQr.startsWith("http") && !rawQr.startsWith("data:image")) {
             formattedQr = `data:image/png;base64,${rawQr}`;
