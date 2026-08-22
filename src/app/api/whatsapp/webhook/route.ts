@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     if (devicePhone) {
       tenant = await prisma.tenant.findFirst({
         where: {
-          OR: [{ waPhoneNumber: devicePhone }, { id: devicePhone }, { name: { contains: devicePhone } }],
+          OR: [{ id: devicePhone }, { name: { contains: devicePhone } }],
         },
       });
     }
