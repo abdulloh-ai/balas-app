@@ -37,6 +37,9 @@ model Tenant {
   paymentStatus      String   @default("SUDAH_BAYAR") // SUDAH_BAYAR, BELUM_BAYAR, MENUNGGU_VERIFIKASI
   lastPaidAt         DateTime @default(now())
   startDate          DateTime @default(now())
+  waStatus           String   @default("DISCONNECTED") // DISCONNECTED, CONNECTING, QR_READY, CONNECTED
+  waQrCode           String?
+  waPhoneNumber      String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

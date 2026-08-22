@@ -1,30 +1,38 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { executeAIChatLogic } from "@/lib/ai-engine";
+import { sendWAServiceMessage } from "@/lib/whatsapp";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const challenge = searchParams.get("hub.challenge");
   const mode = searchParams.get("hub.mode");
-  const token = searchParams.get("hub.verify_token");
 
-  // Webhook Verification (WhatsApp Cloud API / Meta Standard)
+  // Webhook Verification Standard
   if (mode === "subscribe" && challenge) {
     return new NextResponse(challenge, { status: 200 });
   }
 
   return NextResponse.json({
     status: "active",
-    message: "Balas App Production WhatsApp Webhook Endpoint is Running!",
+    message: "Balas App Production WhatsApp Webhook Endpoint is Active & Running!",
     webhookUrl: "https://balas-app.vercel.app/api/whatsapp/webhook",
   });
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({}));
+    let body: any = {};
+    const contentType = request.headers.get("content-type") || "";
 
-    // Detect sender phone number (Fonnte / Wablas / Meta / Custom WA Gateway)
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      const formData = await request.formData();
+      body = Object.fromEntries(formData.entries());
+    } else {
+      body = await request.json().catch(() => ({}));
+    }
+
+    // Deteksi nomor HP pengirim (Fonnte: sender/phone, Wablas: phone, Meta: messages[0].from)
     const rawSender =
       body.sender ||
       body.phone ||
@@ -32,32 +40,34 @@ export async function POST(request: Request) {
       body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from ||
       "";
 
-    // Detect message text
+    // Deteksi isi pesan
     const textMessage =
       body.message ||
       body.text ||
       body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body ||
       "";
 
-    // Detect target store / tenant ID or device ID
-    const deviceId = body.device || body.device_id || body.target || "";
+    // Deteksi nomor HP WA Toko (Device)
+    const devicePhone = body.device || body.target || "";
 
     if (!rawSender || !textMessage) {
       return NextResponse.json(
-        { status: "ignored", reason: "Missing sender or message content" },
+        { status: "ignored", reason: "Missing sender or text content" },
         { status: 200 }
       );
     }
 
-    // Clean phone number format
+    // Clean customer phone number
     const cleanPhone = String(rawSender).replace(/[^0-9]/g, "");
     const customerPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.slice(2) : cleanPhone;
 
-    // Cari Tenant/Toko berdasarkan deviceId atau ambil tenant pertama jika single tenant
+    // Cari Tenant/Toko di Supabase Cloud DB
     let tenant = null;
-    if (deviceId) {
+    if (devicePhone) {
       tenant = await prisma.tenant.findFirst({
-        where: { OR: [{ id: deviceId }, { name: { contains: deviceId } }] },
+        where: {
+          OR: [{ waPhoneNumber: devicePhone }, { id: devicePhone }, { name: { contains: devicePhone } }],
+        },
       });
     }
 
@@ -68,27 +78,42 @@ export async function POST(request: Request) {
     }
 
     if (!tenant) {
-      return NextResponse.json({ error: "Tenant/Toko tidak ditemukan." }, { status: 404 });
+      return NextResponse.json({ error: "Tenant/Toko tidak ditemukan di DB" }, { status: 404 });
     }
 
+    // UPDATE STATUS KONEKSI PERSISTEN 100% DI SUPABASE CLOUD DB
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: {
+        waStatus: "CONNECTED",
+        waPhoneNumber: devicePhone || tenant.waPhoneNumber || "Active",
+      },
+    });
+
     console.log(
-      `[WA Production Webhook] Chat masuk dari ${customerPhone} ke toko ${tenant.name}: "${textMessage}"`
+      `[WA Production Webhook] Pesan dari ${customerPhone} ke toko ${tenant.name}: "${textMessage}"`
     );
 
-    // Eksekusi AI Engine
+    // Eksekusi AI Engine (Gemini AI + Tool Catat Pesanan & Eskalasi)
     const aiResult = await executeAIChatLogic(tenant.id, customerPhone, textMessage);
+    const replyText = aiResult.reply || "Maaf, pesan Anda sudah diterima toko.";
 
-    // Return response payload for Fonnte / Wablas auto-reply integration
+    // Kirim balasan langsung via Fonnte API ke WA Pelanggan
+    await sendWAServiceMessage(customerPhone, replyText);
+
     return NextResponse.json({
       status: "success",
-      reply: aiResult.reply,
+      reply: replyText,
       customerPhone,
       tenantId: tenant.id,
       storeName: tenant.name,
       usingApiKey: aiResult.usingApiKey,
     });
   } catch (error: any) {
-    console.error("WA Webhook Error:", error);
-    return NextResponse.json({ error: error.message || "Webhook processing error" }, { status: 500 });
+    console.error("WA Production Webhook Error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal webhook error" },
+      { status: 500 }
+    );
   }
 }
