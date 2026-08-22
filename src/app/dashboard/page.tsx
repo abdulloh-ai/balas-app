@@ -295,7 +295,12 @@ export default function BusinessOwnerDashboard() {
     if (activeTab === "chat") fetchChatHistory();
     if (activeTab === "pesanan") fetchOrdersData();
     if (activeTab === "eskalasi") fetchEscalationsData();
-    if (activeTab === "wa") fetchWAStatus();
+    if (activeTab === "wa") {
+      fetchWAStatus();
+      if (waState.status === "DISCONNECTED") {
+        handleConnectWA();
+      }
+    }
   }, [activeTab, reportPeriod]);
 
   // Polling status WA saat tab WA aktif
