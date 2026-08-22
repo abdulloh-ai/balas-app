@@ -18,7 +18,7 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
     }
 
     // Ambil Token Fonnte dari Tenant atau dari Environment Variable Vercel
-    const fonnteToken = process.env.FONNTE_TOKEN || "";
+    const fonnteToken = process.env.FONNTE_TOKEN || "iXASoARwZ22PqNd3LWdA";
 
     if (fonnteToken) {
       // Cek status perangkat langsung ke Fonnte API
@@ -66,7 +66,7 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
 
 export async function initWASession(tenantId: string): Promise<WASessionState> {
   try {
-    const fonnteToken = process.env.FONNTE_TOKEN || "";
+    const fonnteToken = process.env.FONNTE_TOKEN || "iXASoARwZ22PqNd3LWdA";
 
     if (fonnteToken) {
       // Panggil QR Code Fonnte API
@@ -128,7 +128,7 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
 
 export async function disconnectWASession(tenantId: string): Promise<WASessionState> {
   try {
-    const fonnteToken = process.env.FONNTE_TOKEN || "";
+    const fonnteToken = process.env.FONNTE_TOKEN || "iXASoARwZ22PqNd3LWdA";
 
     if (fonnteToken) {
       await fetch("https://api.fonnte.com/disconnect", {
@@ -161,7 +161,7 @@ export async function sendWAServiceMessage(
   token?: string
 ): Promise<boolean> {
   try {
-    const fonnteToken = token || process.env.FONNTE_TOKEN || "";
+    const fonnteToken = token || process.env.FONNTE_TOKEN || "iXASoARwZ22PqNd3LWdA";
     if (!fonnteToken) {
       console.warn("FONNTE_TOKEN belum dipasang di Environment Variable Vercel.");
       return false;
