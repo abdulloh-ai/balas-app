@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 
 export interface WASessionState {
-  status: "DISCONNECTED" | "CONNECTING" | "QR_READY" | "CONNECTED";
+  status: "DISCONNECTED" | "CONNECTING" | "QR_READY" | "SCAN_QR" | "CONNECTED";
   qrCodeUrl: string | null;
+  qr?: string | null;
   phoneNumber: string | null;
   error?: string | null;
 }
@@ -15,7 +16,6 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
       where: { id: tenantId },
     });
 
-    // PRIORITAS 1: Jika DB Supabase Cloud sudah menyimpan status CONNECTED, pertahankan 100% PERSISTEN!
     if (tenant && (tenant as any).waStatus === "CONNECTED") {
       return {
         status: "CONNECTED",
@@ -65,6 +65,7 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
     return {
       status: ((tenant as any)?.waStatus as any) || "DISCONNECTED",
       qrCodeUrl: (tenant as any)?.waQrCode || null,
+      qr: (tenant as any)?.waQrCode || null,
       phoneNumber: (tenant as any)?.waPhoneNumber || null,
     };
   } catch (error) {
@@ -90,13 +91,11 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
     const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 
     if (fonnteToken) {
-      // 1. Panggil connect untuk menginisialisasi sesi Fonnte
       await fetch("https://api.fonnte.com/connect", {
         method: "POST",
         headers: { Authorization: fonnteToken },
       }).catch(() => {});
 
-      // 2. Ambil Kode QR dari Fonnte API
       const res = await fetch("https://api.fonnte.com/qr", {
         method: "POST",
         headers: { Authorization: fonnteToken },
@@ -104,7 +103,7 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
 
       if (res.ok) {
         const data = await res.json();
-        let rawQr = data.url || data.qr || null;
+        let rawQr = data.url || data.qr || data.image || null;
 
         if (rawQr) {
           let formattedQr = rawQr;
@@ -116,15 +115,16 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
             await prisma.tenant.update({
               where: { id: tenantId },
               data: {
-                waStatus: "QR_READY",
+                waStatus: "SCAN_QR",
                 waQrCode: formattedQr,
               } as any,
             });
           }
 
           return {
-            status: "QR_READY",
+            status: "SCAN_QR",
             qrCodeUrl: formattedQr,
+            qr: formattedQr,
             phoneNumber: null,
           };
         }
@@ -138,15 +138,16 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
       await prisma.tenant.update({
         where: { id: tenantId },
         data: {
-          waStatus: "QR_READY",
+          waStatus: "SCAN_QR",
           waQrCode: fallbackQr,
         } as any,
       });
     }
 
     return {
-      status: "QR_READY",
+      status: "SCAN_QR",
       qrCodeUrl: fallbackQr,
+      qr: fallbackQr,
       phoneNumber: null,
     };
   } catch (error: any) {
