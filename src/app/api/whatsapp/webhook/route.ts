@@ -57,6 +57,19 @@ export async function POST(request: Request) {
       );
     }
 
+    // ABAIKAN PESAN JIKA BERASAL DARI BALASAN BOT SENDIRI (MENCEGAH LOOPING 16 KALI)
+    if (
+      textMessage.includes("sent via fonnte.com") ||
+      textMessage.toLowerCase().includes("buka. ad yg mau di pesan") ||
+      textMessage.toLowerCase().includes("ada yang bisa kami bantu") ||
+      textMessage.toLowerCase().includes("terima kasih telah menghubungi")
+    ) {
+      return NextResponse.json(
+        { status: "ignored", reason: "Bot self-loop message prevented" },
+        { status: 200 }
+      );
+    }
+
     // Clean customer phone number
     const cleanPhone = String(rawSender).replace(/[^0-9]/g, "");
     const customerPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.slice(2) : cleanPhone;
@@ -82,7 +95,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Tenant/Toko tidak ditemukan di DB" }, { status: 404 });
     }
 
-    // UPDATE STATUS KONEKSI PERSISTEN DI SUPABASE CLOUD DB (Wrapped safe catch agar tidak menghentikan AI reply)
+    // UPDATE STATUS KONEKSI PERSISTEN DI SUPABASE CLOUD DB (Safe catch)
     try {
       await prisma.tenant.update({
         where: { id: tenant.id },
@@ -105,14 +118,11 @@ export async function POST(request: Request) {
 
     const replyText = aiResult.reply || "Maaf, pesan Anda sudah diterima toko.";
 
-    // Kirim balasan via Fonnte API ke WA Pelanggan
+    // Kirim HANYA 1 kali balasan resmi via Fonnte API (Target format 628...)
     await sendWAServiceMessage(targetPhone, replyText).catch(() => {});
-    await sendWAServiceMessage(customerPhone, replyText).catch(() => {});
 
-    // Kembalikan JSON reply resmi Fonnte Webhook Auto-Reply
+    // Kembalikan JSON response standar tanpa menggandakan balasan
     return NextResponse.json({
-      reply: replyText,
-      message: replyText,
       status: "success",
       customerPhone,
       targetPhone,
