@@ -724,7 +724,7 @@ export default function BusinessOwnerDashboard() {
                   </div>
                 )}
 
-                {(waState.status === "QR_READY" || (waState.qrCodeUrl && waState.status !== "CONNECTED")) && (
+                {waState.status === "QR_READY" && (
                   <div className="p-6 bg-white rounded-3xl border border-[#2F6A55] ring-2 ring-[#2F6A55]/20 space-y-4 text-center">
                     <span className="px-3.5 py-1 bg-[#2F6A55]/10 text-[#2F6A55] text-xs font-bold rounded-full">
                       ✨ Kode QR WhatsApp Siap Di-scan
