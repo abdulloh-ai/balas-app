@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Clean customer phone number (Format 08... untuk DB, Format 628... untuk target Fonnte Send API)
+    // Clean customer phone number
     const cleanPhone = String(rawSender).replace(/[^0-9]/g, "");
     const customerPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.slice(2) : cleanPhone;
     const targetPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
@@ -69,42 +69,51 @@ export async function POST(request: Request) {
         where: {
           OR: [{ id: devicePhone }, { name: { contains: devicePhone } }],
         },
-      });
+      }).catch(() => null);
     }
 
     if (!tenant) {
       tenant = await prisma.tenant.findFirst({
         orderBy: { createdAt: "asc" },
-      });
+      }).catch(() => null);
     }
 
     if (!tenant) {
       return NextResponse.json({ error: "Tenant/Toko tidak ditemukan di DB" }, { status: 404 });
     }
 
-    // UPDATE STATUS KONEKSI PERSISTEN 100% DI SUPABASE CLOUD DB
-    await prisma.tenant.update({
-      where: { id: tenant.id },
-      data: {
-        waStatus: "CONNECTED",
-        waPhoneNumber: devicePhone || (tenant as any).waPhoneNumber || "Active",
-      } as any,
-    });
+    // UPDATE STATUS KONEKSI PERSISTEN DI SUPABASE CLOUD DB (Wrapped safe catch agar tidak menghentikan AI reply)
+    try {
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: {
+          waStatus: "CONNECTED",
+          waPhoneNumber: devicePhone || (tenant as any).waPhoneNumber || "Active",
+        } as any,
+      }).catch(() => {});
+    } catch (e) {}
 
     console.log(
       `[WA Production Webhook] Pesan dari ${customerPhone} (target: ${targetPhone}) ke toko ${tenant.name}: "${textMessage}"`
     );
 
     // Eksekusi AI Engine (Gemini AI + Tool Catat Pesanan & Eskalasi)
-    const aiResult = await executeAIChatLogic(tenant.id, customerPhone, textMessage);
+    const aiResult = await executeAIChatLogic(tenant.id, customerPhone, textMessage).catch((aiErr) => {
+      console.error("AI Logic Error:", aiErr);
+      return { reply: "Halo! Terima kasih telah menghubungi kami. Pesan Anda sudah diterima toko.", usingApiKey: false };
+    });
+
     const replyText = aiResult.reply || "Maaf, pesan Anda sudah diterima toko.";
 
-    // Kirim balasan langsung via Fonnte API ke WA Pelanggan menggunakan targetPhone (format 628...)
-    await sendWAServiceMessage(targetPhone, replyText);
+    // Kirim balasan via Fonnte API ke WA Pelanggan
+    await sendWAServiceMessage(targetPhone, replyText).catch(() => {});
+    await sendWAServiceMessage(customerPhone, replyText).catch(() => {});
 
+    // Kembalikan JSON reply resmi Fonnte Webhook Auto-Reply
     return NextResponse.json({
-      status: "success",
       reply: replyText,
+      message: replyText,
+      status: "success",
       customerPhone,
       targetPhone,
       tenantId: tenant.id,
