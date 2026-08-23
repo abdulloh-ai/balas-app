@@ -26,22 +26,40 @@ export async function GET() {
       try {
         const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } }).catch(() => null);
         if (tenant) {
-          if ((tenant as any).waStatus === "CONNECTED") {
+          const dbStatus = (tenant as any).waStatus;
+          const dbQr = (tenant as any).waQrCode;
+          phone = (tenant as any).waPhoneNumber || null;
+
+          if (dbStatus === "CONNECTED") {
             return NextResponse.json(
               {
                 state: {
                   status: "CONNECTED",
                   qrCodeUrl: null,
-                  phoneNumber: (tenant as any).waPhoneNumber || "0895375488444",
+                  phoneNumber: phone || "0895375488444",
                 },
               },
               { status: 200 }
             );
           }
 
-          currentStatus = (tenant as any).waStatus || "DISCONNECTED";
-          currentQr = (tenant as any).waQrCode || fallbackQr;
-          phone = (tenant as any).waPhoneNumber || null;
+          // Kunci status QR_READY agar tidak pernah tertindih oleh status DISCONNECTED poling Fonnte
+          if (dbStatus === "QR_READY" || dbStatus === "SCAN_QR") {
+            return NextResponse.json(
+              {
+                state: {
+                  status: "QR_READY",
+                  qrCodeUrl: dbQr || fallbackQr,
+                  qr: dbQr || fallbackQr,
+                  phoneNumber: phone,
+                },
+              },
+              { status: 200 }
+            );
+          }
+
+          currentStatus = dbStatus || "DISCONNECTED";
+          currentQr = dbQr || fallbackQr;
         }
       } catch (dbErr) {
         console.error("DB status query error:", dbErr);
