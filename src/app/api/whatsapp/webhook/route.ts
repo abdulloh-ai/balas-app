@@ -57,9 +57,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Clean customer phone number
+    // Clean customer phone number (Format 08... untuk DB, Format 628... untuk target Fonnte Send API)
     const cleanPhone = String(rawSender).replace(/[^0-9]/g, "");
     const customerPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.slice(2) : cleanPhone;
+    const targetPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
 
     // Cari Tenant/Toko di Supabase Cloud DB
     let tenant = null;
@@ -91,20 +92,21 @@ export async function POST(request: Request) {
     });
 
     console.log(
-      `[WA Production Webhook] Pesan dari ${customerPhone} ke toko ${tenant.name}: "${textMessage}"`
+      `[WA Production Webhook] Pesan dari ${customerPhone} (target: ${targetPhone}) ke toko ${tenant.name}: "${textMessage}"`
     );
 
     // Eksekusi AI Engine (Gemini AI + Tool Catat Pesanan & Eskalasi)
     const aiResult = await executeAIChatLogic(tenant.id, customerPhone, textMessage);
     const replyText = aiResult.reply || "Maaf, pesan Anda sudah diterima toko.";
 
-    // Kirim balasan langsung via Fonnte API ke WA Pelanggan
-    await sendWAServiceMessage(customerPhone, replyText);
+    // Kirim balasan langsung via Fonnte API ke WA Pelanggan menggunakan targetPhone (format 628...)
+    await sendWAServiceMessage(targetPhone, replyText);
 
     return NextResponse.json({
       status: "success",
       reply: replyText,
       customerPhone,
+      targetPhone,
       tenantId: tenant.id,
       storeName: tenant.name,
       usingApiKey: aiResult.usingApiKey,
