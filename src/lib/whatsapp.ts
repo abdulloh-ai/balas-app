@@ -41,7 +41,6 @@ export async function createTenantFonnteDevice(tenantId: string, tenantName: str
 
     const accountToken = process.env.FONNTE_ACCOUNT_TOKEN || FONNTE_ACCOUNT_TOKEN_DEFAULT;
     const deviceName = `${tenantName || "Toko Balas"} (${tenantId.slice(-4)})`;
-    const devicePhone = (tenant as any)?.waPhoneNumber || `089${Math.floor(100000000 + Math.random() * 900000000)}`;
 
     // 1. Panggil API Fonnte /add-device menggunakan Account Token Master resmi
     const res = await fetch("https://api.fonnte.com/add-device", {
@@ -51,7 +50,6 @@ export async function createTenantFonnteDevice(tenantId: string, tenantName: str
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        device: devicePhone,
         name: deviceName,
       }),
     });
@@ -87,6 +85,9 @@ export async function createTenantFonnteDevice(tenantId: string, tenantName: str
             } as any,
           }).catch(() => {});
         }
+
+        // Berikan jeda 2 detik agar Fonnte socket per-device siap menyalakan QR
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         return newDeviceToken;
       }
@@ -189,6 +190,9 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
         method: "POST",
         headers: { Authorization: fonnteToken },
       }).catch(() => {});
+
+      // Berikan jeda 1 detik agar Fonnte socket siap
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const res = await fetch("https://api.fonnte.com/qr", {
         method: "POST",
