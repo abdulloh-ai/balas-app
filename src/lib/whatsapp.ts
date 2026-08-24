@@ -10,6 +10,90 @@ export interface WASessionState {
 
 const FONNTE_TOKEN_DEFAULT = "iXASoARwZ22PqNd3LWdA";
 
+export async function getTenantFonnteToken(tenantId?: string | null): Promise<string> {
+  if (!tenantId) {
+    return process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+  }
+
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (tenant && (tenant as any).fonnteDeviceToken) {
+      return (tenant as any).fonnteDeviceToken;
+    }
+  } catch (e) {}
+
+  return process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+}
+
+export async function createTenantFonnteDevice(tenantId: string, tenantName: string): Promise<string> {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (tenant && (tenant as any).fonnteDeviceToken) {
+      return (tenant as any).fonnteDeviceToken;
+    }
+
+    const accountToken = process.env.FONNTE_ACCOUNT_TOKEN || process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    const deviceName = `${tenantName || "Toko Balas"} (${tenantId.slice(-4)})`;
+
+    // 1. Panggil API Fonnte /add-device menggunakan Account Token Master
+    const res = await fetch("https://api.fonnte.com/add-device", {
+      method: "POST",
+      headers: {
+        Authorization: accountToken,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        name: deviceName,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const newDeviceToken = data.token || data.device_token || null;
+      const newDeviceId = data.id || data.device_id || null;
+
+      if (newDeviceToken) {
+        // 2. Set Webhook URL resmi per-device secara otomatis menggunakan parameter 'webhook'
+        await fetch("https://api.fonnte.com/update-device", {
+          method: "POST",
+          headers: {
+            Authorization: newDeviceToken,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            webhook: "https://balas-app.vercel.app/api/whatsapp/webhook",
+            autoread: "1",
+            personal: "1",
+          }),
+        }).catch(() => {});
+
+        // 3. Simpan fonnteDeviceToken & fonnteDeviceId ke DB Tenant
+        if (tenantId) {
+          await prisma.tenant.update({
+            where: { id: tenantId },
+            data: {
+              fonnteDeviceToken: newDeviceToken,
+              fonnteDeviceId: String(newDeviceId || ""),
+            } as any,
+          }).catch(() => {});
+        }
+
+        return newDeviceToken;
+      }
+    }
+  } catch (error) {
+    console.error("createTenantFonnteDevice Error:", error);
+  }
+
+  return process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+}
+
 export async function getWASessionState(tenantId: string): Promise<WASessionState> {
   try {
     const tenant = await prisma.tenant.findUnique({
@@ -24,7 +108,7 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
       };
     }
 
-    const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    const fonnteToken = await getTenantFonnteToken(tenantId);
 
     if (fonnteToken) {
       try {
@@ -47,7 +131,7 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
               await prisma.tenant.update({
                 where: { id: tenantId },
                 data: { waStatus: "CONNECTED", waPhoneNumber: phone } as any,
-              });
+              }).catch(() => {});
             }
 
             return {
@@ -76,7 +160,7 @@ export async function getWASessionState(tenantId: string): Promise<WASessionStat
 
 export async function initWASession(tenantId: string): Promise<WASessionState> {
   try {
-    const tenant = await prisma.tenant.findUnique({
+    let tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
     });
 
@@ -88,7 +172,13 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
       };
     }
 
-    const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    let fonnteToken = (tenant as any)?.fonnteDeviceToken;
+    if (!fonnteToken && tenant) {
+      fonnteToken = await createTenantFonnteDevice(tenant.id, tenant.name);
+    }
+    if (!fonnteToken) {
+      fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    }
 
     if (fonnteToken) {
       await fetch("https://api.fonnte.com/connect", {
@@ -115,14 +205,14 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
             await prisma.tenant.update({
               where: { id: tenantId },
               data: {
-                waStatus: "SCAN_QR",
+                waStatus: "QR_READY",
                 waQrCode: formattedQr,
               } as any,
-            });
+            }).catch(() => {});
           }
 
           return {
-            status: "SCAN_QR",
+            status: "QR_READY",
             qrCodeUrl: formattedQr,
             qr: formattedQr,
             phoneNumber: null,
@@ -138,14 +228,14 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
       await prisma.tenant.update({
         where: { id: tenantId },
         data: {
-          waStatus: "SCAN_QR",
+          waStatus: "QR_READY",
           waQrCode: fallbackQr,
         } as any,
-      });
+      }).catch(() => {});
     }
 
     return {
-      status: "SCAN_QR",
+      status: "QR_READY",
       qrCodeUrl: fallbackQr,
       qr: fallbackQr,
       phoneNumber: null,
@@ -163,7 +253,7 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
 
 export async function disconnectWASession(tenantId: string): Promise<WASessionState> {
   try {
-    const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    const fonnteToken = await getTenantFonnteToken(tenantId);
 
     if (fonnteToken) {
       await fetch("https://api.fonnte.com/disconnect", {
@@ -180,7 +270,7 @@ export async function disconnectWASession(tenantId: string): Promise<WASessionSt
           waQrCode: null,
           waPhoneNumber: null,
         } as any,
-      });
+      }).catch(() => {});
     }
 
     return { status: "DISCONNECTED", qrCodeUrl: null, phoneNumber: null };
@@ -193,13 +283,15 @@ export async function disconnectWASession(tenantId: string): Promise<WASessionSt
 export async function sendWAServiceMessage(
   targetPhone: string,
   message: string,
-  token?: string
+  tokenOrTenantId?: string
 ): Promise<boolean> {
   try {
-    const fonnteToken = token || process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    let fonnteToken = tokenOrTenantId;
+    if (!fonnteToken || !fonnteToken.startsWith("iX") && fonnteToken.length < 15) {
+      fonnteToken = await getTenantFonnteToken(tokenOrTenantId);
+    }
     if (!fonnteToken) {
-      console.warn("FONNTE_TOKEN tidak tersedia.");
-      return false;
+      fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
     }
 
     const res = await fetch("https://api.fonnte.com/send", {
@@ -214,7 +306,7 @@ export async function sendWAServiceMessage(
       }),
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ status: false }));
     console.log(`[Fonnte Send API] Kirim ke ${targetPhone}:`, data);
     return data.status === true;
   } catch (error) {

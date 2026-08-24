@@ -40,6 +40,8 @@ model Tenant {
   waStatus           String   @default("DISCONNECTED") // DISCONNECTED, CONNECTING, QR_READY, CONNECTED
   waQrCode           String?
   waPhoneNumber      String?
+  fonnteDeviceToken  String?
+  fonnteDeviceId     String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

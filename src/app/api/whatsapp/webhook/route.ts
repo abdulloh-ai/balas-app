@@ -47,8 +47,9 @@ export async function POST(request: Request) {
       body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body ||
       "";
 
-    // Deteksi nomor HP WA Toko (Device)
+    // Deteksi ID Perangkat WA Toko (Device)
     const devicePhone = body.device || body.target || "";
+    const deviceToken = body.token || body.device_token || "";
 
     if (!rawSender || !textMessage) {
       return NextResponse.json(
@@ -75,12 +76,18 @@ export async function POST(request: Request) {
     const customerPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.slice(2) : cleanPhone;
     const targetPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
 
-    // Cari Tenant/Toko di Supabase Cloud DB
+    // Cari Tenant/Toko secara presisi di Supabase Cloud DB berdasarkan deviceToken / devicePhone
     let tenant = null;
-    if (devicePhone) {
+    if (deviceToken || devicePhone) {
       tenant = await prisma.tenant.findFirst({
         where: {
-          OR: [{ id: devicePhone }, { name: { contains: devicePhone } }],
+          OR: [
+            { fonnteDeviceToken: deviceToken },
+            { fonnteDeviceId: String(devicePhone) },
+            { waPhoneNumber: String(devicePhone) },
+            { id: String(devicePhone) },
+            { name: { contains: String(devicePhone) } },
+          ],
         },
       }).catch(() => null);
     }
@@ -110,16 +117,17 @@ export async function POST(request: Request) {
       `[WA Production Webhook] Pesan dari ${customerPhone} (target: ${targetPhone}) ke toko ${tenant.name}: "${textMessage}"`
     );
 
-    // Eksekusi AI Engine (Gemini AI + Tool Catat Pesanan & Eskalasi)
+    // Eksekusi AI Engine khusus katalog toko tenant ini (Gemini AI + Tool Catat Pesanan & Eskalasi)
     const aiResult = await executeAIChatLogic(tenant.id, customerPhone, textMessage).catch((aiErr) => {
       console.error("AI Logic Error:", aiErr);
       return { reply: "Halo! Terima kasih telah menghubungi kami. Pesan Anda sudah diterima toko.", usingApiKey: false };
     });
 
     const replyText = aiResult.reply || "Maaf, pesan Anda sudah diterima toko.";
+    const tenantFonnteToken = (tenant as any).fonnteDeviceToken || tenant.id;
 
-    // Kirim HANYA 1 kali balasan resmi via Fonnte API (Target format 628...)
-    await sendWAServiceMessage(targetPhone, replyText).catch(() => {});
+    // Kirim HANYA 1 kali balasan resmi via Fonnte API menggunakan token Fonnte milik toko ini
+    await sendWAServiceMessage(targetPhone, replyText, tenantFonnteToken).catch(() => {});
 
     // Kembalikan JSON response standar tanpa menggandakan balasan
     return NextResponse.json({

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getBusinessOwnerSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTenantFonnteToken } from "@/lib/whatsapp";
 
 const FONNTE_TOKEN_DEFAULT = "iXASoARwZ22PqNd3LWdA";
 
@@ -21,11 +22,13 @@ export async function GET() {
     let currentStatus = "DISCONNECTED";
     let currentQr: string | null = fallbackQr;
     let phone: string | null = null;
+    let fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 
     if (tenantId) {
       try {
         const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } }).catch(() => null);
         if (tenant) {
+          fonnteToken = (tenant as any).fonnteDeviceToken || fonnteToken;
           const dbStatus = (tenant as any).waStatus;
           const dbQr = (tenant as any).waQrCode;
           phone = (tenant as any).waPhoneNumber || null;
@@ -66,12 +69,10 @@ export async function GET() {
       }
     }
 
-    const token = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
-
     try {
       const res = await fetch("https://api.fonnte.com/device", {
         method: "POST",
-        headers: { Authorization: token },
+        headers: { Authorization: fonnteToken },
       }).catch(() => null);
 
       if (res && res.ok) {
