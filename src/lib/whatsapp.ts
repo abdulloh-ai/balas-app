@@ -9,6 +9,7 @@ export interface WASessionState {
 }
 
 const FONNTE_TOKEN_DEFAULT = "iXASoARwZ22PqNd3LWdA";
+const FONNTE_ACCOUNT_TOKEN_DEFAULT = "MmtP2g2wxje7G7bVyUETTUrcExap5av3BHWsEjx1d";
 
 export async function getTenantFonnteToken(tenantId?: string | null): Promise<string> {
   if (!tenantId) {
@@ -38,10 +39,11 @@ export async function createTenantFonnteDevice(tenantId: string, tenantName: str
       return (tenant as any).fonnteDeviceToken;
     }
 
-    const accountToken = process.env.FONNTE_ACCOUNT_TOKEN || process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    const accountToken = process.env.FONNTE_ACCOUNT_TOKEN || FONNTE_ACCOUNT_TOKEN_DEFAULT;
     const deviceName = `${tenantName || "Toko Balas"} (${tenantId.slice(-4)})`;
+    const devicePhone = (tenant as any)?.waPhoneNumber || `089${Math.floor(100000000 + Math.random() * 900000000)}`;
 
-    // 1. Panggil API Fonnte /add-device menggunakan Account Token Master
+    // 1. Panggil API Fonnte /add-device menggunakan Account Token Master resmi
     const res = await fetch("https://api.fonnte.com/add-device", {
       method: "POST",
       headers: {
@@ -49,14 +51,16 @@ export async function createTenantFonnteDevice(tenantId: string, tenantName: str
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
+        device: devicePhone,
         name: deviceName,
       }),
     });
 
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
+      console.log(`[Fonnte Auto Add-Device] Result for ${tenantName}:`, data);
       const newDeviceToken = data.token || data.device_token || null;
-      const newDeviceId = data.id || data.device_id || null;
+      const newDeviceId = data.id || data.device_id || data.device || null;
 
       if (newDeviceToken) {
         // 2. Set Webhook URL resmi per-device secara otomatis menggunakan parameter 'webhook'
@@ -287,7 +291,7 @@ export async function sendWAServiceMessage(
 ): Promise<boolean> {
   try {
     let fonnteToken = tokenOrTenantId;
-    if (!fonnteToken || !fonnteToken.startsWith("iX") && fonnteToken.length < 15) {
+    if (!fonnteToken || (!fonnteToken.startsWith("iX") && fonnteToken.length < 15)) {
       fonnteToken = await getTenantFonnteToken(tokenOrTenantId);
     }
     if (!fonnteToken) {
