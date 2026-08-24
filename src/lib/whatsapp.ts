@@ -35,10 +35,6 @@ export async function createTenantFonnteDevice(tenantId: string, tenantName: str
       where: { id: tenantId },
     });
 
-    if (tenant && (tenant as any).fonnteDeviceToken) {
-      return (tenant as any).fonnteDeviceToken;
-    }
-
     const accountToken = process.env.FONNTE_ACCOUNT_TOKEN || FONNTE_ACCOUNT_TOKEN_DEFAULT;
     const deviceName = `${tenantName || "Toko Balas"} (${tenantId.slice(-4)})`;
 
@@ -82,6 +78,8 @@ export async function createTenantFonnteDevice(tenantId: string, tenantName: str
             data: {
               fonnteDeviceToken: newDeviceToken,
               fonnteDeviceId: String(newDeviceId || ""),
+              waStatus: "DISCONNECTED",
+              waQrCode: null,
             } as any,
           }).catch(() => {});
         }
@@ -178,6 +176,8 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
     }
 
     let fonnteToken = (tenant as any)?.fonnteDeviceToken;
+
+    // Jika token belum ada atau sebelumnya terhapus di Fonnte, otomatis buatkan device token baru
     if (!fonnteToken && tenant) {
       fonnteToken = await createTenantFonnteDevice(tenant.id, tenant.name);
     }
@@ -191,7 +191,6 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
         headers: { Authorization: fonnteToken },
       }).catch(() => {});
 
-      // Berikan jeda 1 detik agar Fonnte socket siap
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const res = await fetch("https://api.fonnte.com/qr", {
@@ -202,6 +201,21 @@ export async function initWASession(tenantId: string): Promise<WASessionState> {
       if (res.ok) {
         const data = await res.json();
         let rawQr = data.url || data.qr || data.image || null;
+
+        // Jika Fonnte merespons device invalid/terhapus, buatkan device baru secara otomatis
+        if (data.status === false && (data.reason === "invalid device" || data.reason === "invalid token")) {
+          if (tenant) {
+            fonnteToken = await createTenantFonnteDevice(tenant.id, tenant.name);
+            const retryRes = await fetch("https://api.fonnte.com/qr", {
+              method: "POST",
+              headers: { Authorization: fonnteToken },
+            });
+            if (retryRes.ok) {
+              const retryData = await retryRes.json();
+              rawQr = retryData.url || retryData.qr || retryData.image || null;
+            }
+          }
+        }
 
         if (rawQr) {
           let formattedQr = rawQr;
