@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     const customerPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.slice(2) : cleanPhone;
     const targetPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
 
-    // Cari Tenant/Toko secara presisi di Supabase Cloud DB berdasarkan deviceToken / devicePhone
+    // Cari Tenant/Toko secara presisi di Supabase Cloud DB berdasarkan deviceToken / devicePhone (as any untuk Vercel build)
     let tenant = null;
     if (deviceToken || devicePhone) {
       tenant = await prisma.tenant.findFirst({
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
             { waPhoneNumber: String(devicePhone) },
             { id: String(devicePhone) },
             { name: { contains: String(devicePhone) } },
-          ],
+          ] as any,
         },
       }).catch(() => null);
     }
