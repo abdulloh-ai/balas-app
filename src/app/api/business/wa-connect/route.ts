@@ -1,34 +1,36 @@
 import { NextResponse } from "next/server";
 import { getBusinessOwnerSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createTenantFonnteDevice, getTenantFonnteToken } from "@/lib/whatsapp";
+import { createTenantFonnteDevice } from "@/lib/whatsapp";
 
 const FONNTE_TOKEN_DEFAULT = "iXASoARwZ22PqNd3LWdA";
 
 export async function POST() {
   try {
     const session = await getBusinessOwnerSession().catch(() => null);
-    let tenantId = session?.tenantId;
+    const tenantId = session?.tenantId || null;
 
     if (!tenantId) {
-      const firstTenant = await prisma.tenant.findFirst().catch(() => null);
-      tenantId = firstTenant?.id;
+      return NextResponse.json(
+        { error: "Sesi login tidak ditemukan. Silakan login terlebih dahulu." },
+        { status: 401 }
+      );
     }
 
-    let tenant = null;
-    if (tenantId) {
-      tenant = await prisma.tenant.findUnique({ where: { id: tenantId } }).catch(() => null);
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } }).catch(() => null);
+    if (!tenant) {
+      return NextResponse.json({ error: "Toko tidak ditemukan di database" }, { status: 404 });
     }
 
     let fonnteToken = (tenant as any)?.fonnteDeviceToken;
-    if (!fonnteToken && tenant) {
+    if (!fonnteToken) {
       fonnteToken = await createTenantFonnteDevice(tenant.id, tenant.name);
     }
     if (!fonnteToken) {
       fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
     }
 
-    // 1. Panggil connect Fonnte untuk token tenant ini
+    // 1. Panggil connect Fonnte khusus untuk token tenant ini
     await fetch("https://api.fonnte.com/connect", {
       method: "POST",
       headers: { Authorization: fonnteToken },
@@ -58,15 +60,13 @@ export async function POST() {
       qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=Fonnte_WhatsApp_Connect_BalasApp";
     }
 
-    if (tenantId) {
-      await prisma.tenant.update({
-        where: { id: tenantId },
-        data: {
-          waStatus: "QR_READY",
-          waQrCode: qrCodeUrl,
-        } as any,
-      }).catch(() => {});
-    }
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        waStatus: "QR_READY",
+        waQrCode: qrCodeUrl,
+      } as any,
+    }).catch(() => {});
 
     return NextResponse.json(
       {
