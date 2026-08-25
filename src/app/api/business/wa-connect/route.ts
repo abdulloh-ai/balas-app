@@ -38,31 +38,42 @@ export async function POST() {
       headers: { Authorization: fonnteToken },
     }).catch(() => {});
 
-    // 2. Berikan jeda 2 detik agar Fonnte socket per-device siap menyalakan QR matang
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // 2. Poll Fonnte API /qr hingga 4 kali (jeda 2s) sampai Fonnte mengembalikan string QR WhatsApp asli
+    let realQrString: string | null = null;
 
-    // 3. Request POST ke Fonnte API (https://api.fonnte.com/qr)
-    let rawQr: string | null = null;
-    try {
-      const res = await fetch("https://api.fonnte.com/qr", {
-        method: "POST",
-        headers: { Authorization: fonnteToken },
-      });
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.log("[Fonnte Fetch QR Data]:", data);
-        rawQr = data.url || data.qr || data.image || null;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      try {
+        const res = await fetch("https://api.fonnte.com/qr", {
+          method: "POST",
+          headers: { Authorization: fonnteToken },
+        });
+
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          console.log(`[Fonnte Fetch QR Attempt ${attempt}]:`, data);
+          const foundQr = data.url || data.qr || data.image || null;
+          if (foundQr && data.status !== false && !foundQr.includes("Fonnte_WhatsApp_Connect")) {
+            realQrString = foundQr;
+            break;
+          }
+        }
+      } catch (fErr) {
+        console.error(`Fonnte fetch QR attempt ${attempt} error:`, fErr);
       }
-    } catch (fErr) {
-      console.error("Fonnte fetch QR error:", fErr);
     }
 
-    let qrCodeUrl = rawQr;
-    if (rawQr && !rawQr.startsWith("http") && !rawQr.startsWith("data:image")) {
-      qrCodeUrl = `data:image/png;base64,${rawQr}`;
-    }
+    let qrCodeUrl = realQrString;
 
-    if (!qrCodeUrl) {
+    if (realQrString) {
+      if (!realQrString.startsWith("http") && !realQrString.startsWith("data:image")) {
+        if (realQrString.includes("@") || realQrString.includes(",") || realQrString.length > 30) {
+          qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(realQrString)}`;
+        } else {
+          qrCodeUrl = `data:image/png;base64,${realQrString}`;
+        }
+      }
+    } else {
       qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=Fonnte_WhatsApp_Connect_BalasApp";
     }
 
