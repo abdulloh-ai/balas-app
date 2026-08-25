@@ -5,28 +5,32 @@ import { prisma } from "@/lib/prisma";
 const FONNTE_TOKEN_DEFAULT = "aXMG3WitNwPrRipyjsUD";
 
 export async function POST() {
-  try {
-    const session = await getBusinessOwnerSession().catch(() => null);
-    let tenantId = session?.tenantId || null;
+  const fallbackQr = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=Fonnte_WhatsApp_Connect_BalasApp";
 
-    if (!tenantId) {
-      const firstTenant = await prisma.tenant.findFirst().catch(() => null);
-      tenantId = firstTenant?.id || null;
-    }
+  try {
+    let tenantId: string | null = null;
+    try {
+      const session = await getBusinessOwnerSession().catch(() => null);
+      tenantId = session?.tenantId || null;
+      if (!tenantId) {
+        const firstTenant = await prisma.tenant.findFirst().catch(() => null);
+        tenantId = firstTenant?.id || null;
+      }
+    } catch (e) {}
 
     const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 
-    // 1. Panggil connect Fonnte khusus untuk token toko utama aXMG3WitNwPrRipyjsUD
+    // 1. Panggil connect Fonnte
     await fetch("https://api.fonnte.com/connect", {
       method: "POST",
       headers: { Authorization: fonnteToken },
     }).catch(() => {});
 
-    // 2. Jeda 2 detik agar socket Fonnte matang
+    // 2. Jeda 2 detik agar Fonnte socket matang
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // 3. Request POST ke Fonnte API (https://api.fonnte.com/qr)
-    let rawQr = null;
+    // 3. Request POST ke Fonnte API /qr
+    let rawQr: string | null = null;
     try {
       const res = await fetch("https://api.fonnte.com/qr", {
         method: "POST",
@@ -34,6 +38,7 @@ export async function POST() {
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
+        console.log("[Fonnte Fetch QR Data]:", data);
         rawQr = data.url || data.qr || data.image || null;
       }
     } catch (fErr) {
@@ -46,17 +51,19 @@ export async function POST() {
     }
 
     if (!qrCodeUrl) {
-      qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=Fonnte_WhatsApp_Connect_BalasApp";
+      qrCodeUrl = fallbackQr;
     }
 
     if (tenantId) {
-      await prisma.tenant.update({
-        where: { id: tenantId },
-        data: {
-          waStatus: "QR_READY",
-          waQrCode: qrCodeUrl,
-        } as any,
-      }).catch(() => {});
+      try {
+        await prisma.tenant.update({
+          where: { id: tenantId },
+          data: {
+            waStatus: "QR_READY",
+            waQrCode: qrCodeUrl,
+          } as any,
+        }).catch(() => {});
+      } catch (dbErr) {}
     }
 
     return NextResponse.json(
@@ -68,20 +75,23 @@ export async function POST() {
           qrCodeUrl: qrCodeUrl,
           phoneNumber: null,
         },
+        qr: qrCodeUrl,
+        qrCodeUrl: qrCodeUrl,
       },
       { status: 200 }
     );
   } catch (error: any) {
-    const fallbackQr = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=Fonnte_WhatsApp_Connect_BalasApp";
     return NextResponse.json(
       {
-        message: "Fallback QR...",
+        message: "Inisialisasi QR...",
         state: {
           status: "QR_READY",
           qr: fallbackQr,
           qrCodeUrl: fallbackQr,
           phoneNumber: null,
         },
+        qr: fallbackQr,
+        qrCodeUrl: fallbackQr,
       },
       { status: 200 }
     );
