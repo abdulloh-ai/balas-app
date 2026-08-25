@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBusinessOwnerSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createTenantFonnteDevice } from "@/lib/whatsapp";
 
 const FONNTE_TOKEN_DEFAULT = "iXASoARwZ22PqNd3LWdA";
 
@@ -15,65 +14,38 @@ export async function POST() {
       tenantId = firstTenant?.id || null;
     }
 
-    let tenant = null;
-    if (tenantId) {
-      tenant = await prisma.tenant.findUnique({ where: { id: tenantId } }).catch(() => null);
-    }
+    const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 
-    if (!tenant) {
-      return NextResponse.json({ error: "Tenant tidak ditemukan" }, { status: 404 });
-    }
-
-    let fonnteToken = (tenant as any)?.fonnteDeviceToken;
-    if (!fonnteToken) {
-      fonnteToken = await createTenantFonnteDevice(tenant.id, tenant.name).catch(() => null);
-    }
-    if (!fonnteToken) {
-      fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
-    }
-
-    // 1. Panggil connect Fonnte khusus untuk token tenant ini
+    // 1. Panggil connect Fonnte khusus untuk token toko utama iXASoARwZ22PqNd3LWdA
     await fetch("https://api.fonnte.com/connect", {
       method: "POST",
       headers: { Authorization: fonnteToken },
     }).catch(() => {});
 
-    // 2. Poll Fonnte API /qr hingga 4 kali (jeda 2s) sampai Fonnte mengembalikan string QR WhatsApp asli
-    let realQrString: string | null = null;
+    // 2. Jeda 2 detik agar socket Fonnte matang
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      try {
-        const res = await fetch("https://api.fonnte.com/qr", {
-          method: "POST",
-          headers: { Authorization: fonnteToken },
-        });
-
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          console.log(`[Fonnte Fetch QR Attempt ${attempt}]:`, data);
-          const foundQr = data.url || data.qr || data.image || null;
-          if (foundQr && data.status !== false && !foundQr.includes("Fonnte_WhatsApp_Connect")) {
-            realQrString = foundQr;
-            break;
-          }
-        }
-      } catch (fErr) {
-        console.error(`Fonnte fetch QR attempt ${attempt} error:`, fErr);
+    // 3. Request POST ke Fonnte API (https://api.fonnte.com/qr)
+    let rawQr = null;
+    try {
+      const res = await fetch("https://api.fonnte.com/qr", {
+        method: "POST",
+        headers: { Authorization: fonnteToken },
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        rawQr = data.url || data.qr || data.image || null;
       }
+    } catch (fErr) {
+      console.error("Fonnte fetch QR error:", fErr);
     }
 
-    let qrCodeUrl = realQrString;
+    let qrCodeUrl = rawQr;
+    if (rawQr && !rawQr.startsWith("http") && !rawQr.startsWith("data:image")) {
+      qrCodeUrl = `data:image/png;base64,${rawQr}`;
+    }
 
-    if (realQrString) {
-      if (!realQrString.startsWith("http") && !realQrString.startsWith("data:image")) {
-        if (realQrString.includes("@") || realQrString.includes(",") || realQrString.length > 30) {
-          qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(realQrString)}`;
-        } else {
-          qrCodeUrl = `data:image/png;base64,${realQrString}`;
-        }
-      }
-    } else {
+    if (!qrCodeUrl) {
       qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=Fonnte_WhatsApp_Connect_BalasApp";
     }
 
