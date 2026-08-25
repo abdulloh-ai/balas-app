@@ -26,7 +26,7 @@ export async function POST() {
 
     let fonnteToken = (tenant as any)?.fonnteDeviceToken;
     if (!fonnteToken) {
-      fonnteToken = await createTenantFonnteDevice(tenant.id, tenant.name);
+      fonnteToken = await createTenantFonnteDevice(tenant.id, tenant.name).catch(() => null);
     }
     if (!fonnteToken) {
       fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
@@ -38,29 +38,23 @@ export async function POST() {
       headers: { Authorization: fonnteToken },
     }).catch(() => {});
 
-    // 2. Poll Fonnte API /qr hingga 3 kali dengan jeda 1.5s agar Fonnte mengembalikan Kode QR WhatsApp Asli (bukan dummy)
+    // 2. Berikan jeda 2 detik agar Fonnte socket per-device siap menyalakan QR matang
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // 3. Request POST ke Fonnte API (https://api.fonnte.com/qr)
     let rawQr: string | null = null;
-
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      try {
-        const res = await fetch("https://api.fonnte.com/qr", {
-          method: "POST",
-          headers: { Authorization: fonnteToken },
-        });
-
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          console.log(`[Fonnte Fetch QR Attempt ${attempt}]:`, data);
-          const foundQr = data.url || data.qr || data.image || null;
-          if (foundQr && data.status !== false) {
-            rawQr = foundQr;
-            break;
-          }
-        }
-      } catch (fErr) {
-        console.error(`Fonnte fetch QR attempt ${attempt} error:`, fErr);
+    try {
+      const res = await fetch("https://api.fonnte.com/qr", {
+        method: "POST",
+        headers: { Authorization: fonnteToken },
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.log("[Fonnte Fetch QR Data]:", data);
+        rawQr = data.url || data.qr || data.image || null;
       }
+    } catch (fErr) {
+      console.error("Fonnte fetch QR error:", fErr);
     }
 
     let qrCodeUrl = rawQr;
