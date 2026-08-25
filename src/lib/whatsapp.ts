@@ -8,7 +8,7 @@ export interface WASessionState {
   error?: string | null;
 }
 
-const FONNTE_TOKEN_DEFAULT = "iXASoARwZ22PqNd3LWdA";
+const FONNTE_TOKEN_DEFAULT = "aXMG3WitNwPrRipyjsUD";
 
 export async function getTenantFonnteToken(tenantId?: string | null): Promise<string> {
   return process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;

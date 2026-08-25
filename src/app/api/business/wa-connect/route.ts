@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getBusinessOwnerSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const FONNTE_TOKEN_DEFAULT = "iXASoARwZ22PqNd3LWdA";
+const FONNTE_TOKEN_DEFAULT = "aXMG3WitNwPrRipyjsUD";
 
 export async function POST() {
   try {
@@ -16,7 +16,7 @@ export async function POST() {
 
     const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 
-    // 1. Panggil connect Fonnte khusus untuk token toko utama iXASoARwZ22PqNd3LWdA
+    // 1. Panggil connect Fonnte khusus untuk token toko utama aXMG3WitNwPrRipyjsUD
     await fetch("https://api.fonnte.com/connect", {
       method: "POST",
       headers: { Authorization: fonnteToken },
