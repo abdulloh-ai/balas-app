@@ -20,16 +20,31 @@ export async function POST() {
 
     const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 
-    // 1. Panggil connect Fonnte
+    // 1. Daftarkan Webhook URL resmi + nama device pada Fonnte API agar Fonnte tahu ke mana harus meneruskan pesan masuk
+    await fetch("https://api.fonnte.com/update-device", {
+      method: "POST",
+      headers: {
+        Authorization: fonnteToken,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        name: "wa toko balas",
+        webhook: "https://balas-app.vercel.app/api/whatsapp/webhook",
+        autoread: "1",
+        personal: "1",
+      }),
+    }).catch(() => {});
+
+    // 2. Panggil connect Fonnte
     await fetch("https://api.fonnte.com/connect", {
       method: "POST",
       headers: { Authorization: fonnteToken },
     }).catch(() => {});
 
-    // 2. Jeda 2 detik agar Fonnte socket matang
+    // 3. Jeda 2 detik agar Fonnte socket matang
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // 3. Request POST ke Fonnte API /qr
+    // 4. Request POST ke Fonnte API /qr
     let rawQr: string | null = null;
     try {
       const res = await fetch("https://api.fonnte.com/qr", {
