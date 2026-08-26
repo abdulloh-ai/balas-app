@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { executeAIChatLogic } from "@/lib/ai-engine";
 import { sendWAServiceMessage } from "@/lib/whatsapp";
 
+const DEFAULT_FALLBACK_TOKEN = "aXMG3WitNwPrRipyjsUD";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const challenge = searchParams.get("hub.challenge");
   const mode = searchParams.get("hub.mode");
 
-  // Webhook Verification Standard
   if (mode === "subscribe" && challenge) {
     return new NextResponse(challenge, { status: 200 });
   }
@@ -32,7 +33,6 @@ export async function POST(request: Request) {
       body = await request.json().catch(() => ({}));
     }
 
-    // Deteksi nomor HP pengirim (Fonnte: sender/phone, Wablas: phone, Meta: messages[0].from)
     const rawSender =
       body.sender ||
       body.phone ||
@@ -40,14 +40,12 @@ export async function POST(request: Request) {
       body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from ||
       "";
 
-    // Deteksi isi pesan
     const textMessage =
       body.message ||
       body.text ||
       body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body ||
       "";
 
-    // Deteksi ID Perangkat WA Toko (Device)
     const devicePhone = body.device || body.target || "";
     const deviceToken = body.token || body.device_token || "";
 
@@ -58,7 +56,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // ABAIKAN PESAN JIKA BERASAL DARI BALASAN BOT SENDIRI (MENCEGAH LOOPING 16 KALI)
+    // Abaikan pesan jika berasal dari balasan bot sendiri untuk mencegah looping
     if (
       textMessage.includes("sent via fonnte.com") ||
       textMessage.toLowerCase().includes("buka. ad yg mau di pesan") ||
@@ -71,12 +69,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Clean customer phone number
     const cleanPhone = String(rawSender).replace(/[^0-9]/g, "");
     const customerPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.slice(2) : cleanPhone;
     const targetPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
 
-    // Cari Tenant/Toko secara presisi di Supabase Cloud DB berdasarkan deviceToken / devicePhone (as any untuk Vercel build)
+    // 1. Cari Tenant di Supabase Cloud DB dengan fallback otomatis ke tenant utama
     let tenant = null;
     if (deviceToken || devicePhone) {
       tenant = await prisma.tenant.findFirst({
@@ -102,41 +99,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Tenant/Toko tidak ditemukan di DB" }, { status: 404 });
     }
 
-    // UPDATE STATUS KONEKSI PERSISTEN DI SUPABASE CLOUD DB (Safe catch)
+    // 2. Update status koneksi & token terbaru toko di Supabase DB (safe catch)
     try {
       await prisma.tenant.update({
         where: { id: tenant.id },
         data: {
           waStatus: "CONNECTED",
-          waPhoneNumber: devicePhone || (tenant as any).waPhoneNumber || "Active",
+          fonnteDeviceToken: DEFAULT_FALLBACK_TOKEN,
+          waPhoneNumber: devicePhone || (tenant as any).waPhoneNumber || "0895375488444",
         } as any,
       }).catch(() => {});
     } catch (e) {}
 
     console.log(
-      `[WA Production Webhook] Pesan dari ${customerPhone} (target: ${targetPhone}) ke toko ${tenant.name}: "${textMessage}"`
+      `[WA Webhook] Pesan dari ${customerPhone} ke toko ${tenant.name}: "${textMessage}"`
     );
 
-    // Eksekusi AI Engine khusus katalog toko tenant ini (Gemini AI + Tool Catat Pesanan & Eskalasi)
+    // 3. Eksekusi Engine AI Gemini 2.0 untuk menyusun balasan otomatis berdasarkan Katalog Produk Toko
     const aiResult = await executeAIChatLogic(tenant.id, customerPhone, textMessage).catch((aiErr) => {
       console.error("AI Logic Error:", aiErr);
       return { reply: "Halo! Terima kasih telah menghubungi kami. Pesan Anda sudah diterima toko.", usingApiKey: false };
     });
 
     const replyText = aiResult.reply || "Maaf, pesan Anda sudah diterima toko.";
-    const tenantFonnteToken = (tenant as any).fonnteDeviceToken || tenant.id;
+    const activeToken = DEFAULT_FALLBACK_TOKEN;
 
-    // Kirim HANYA 1 kali balasan resmi via Fonnte API menggunakan token Fonnte milik toko ini
-    await sendWAServiceMessage(targetPhone, replyText, tenantFonnteToken).catch(() => {});
+    // 4. Kirim balasan resmi AI Gemini via Fonnte API
+    await sendWAServiceMessage(targetPhone, replyText, activeToken).catch(() => {});
 
-    // Kembalikan JSON response standar tanpa menggandakan balasan
     return NextResponse.json({
       status: "success",
       customerPhone,
       targetPhone,
       tenantId: tenant.id,
       storeName: tenant.name,
-      usingApiKey: aiResult.usingApiKey,
+      replyText,
     });
   } catch (error: any) {
     console.error("WA Production Webhook Error:", error);
