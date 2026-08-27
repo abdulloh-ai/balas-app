@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const customerPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.slice(2) : cleanPhone;
     const targetPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
 
-    // 1. Cari Tenant di Supabase Cloud DB dengan fallback otomatis ke tenant utama
+    // 1. Cari Tenant di Supabase Cloud DB
     let tenant = null;
     if (deviceToken || devicePhone) {
       tenant = await prisma.tenant.findFirst({
@@ -83,7 +83,6 @@ export async function POST(request: Request) {
             { fonnteDeviceId: String(devicePhone) },
             { waPhoneNumber: String(devicePhone) },
             { id: String(devicePhone) },
-            { name: { contains: String(devicePhone) } },
           ] as any,
         },
       }).catch(() => null);
@@ -99,30 +98,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Tenant/Toko tidak ditemukan di DB" }, { status: 404 });
     }
 
-    // 2. Update status koneksi & token terbaru toko di Supabase DB (safe catch)
-    try {
-      await prisma.tenant.update({
-        where: { id: tenant.id },
-        data: {
-          waStatus: "CONNECTED",
-          fonnteDeviceToken: DEFAULT_FALLBACK_TOKEN,
-          waPhoneNumber: devicePhone || (tenant as any).waPhoneNumber || "0895375488444",
-        } as any,
-      }).catch(() => {});
-    } catch (e) {}
-
     console.log(
       `[WA Webhook] Pesan dari ${customerPhone} ke toko ${tenant.name}: "${textMessage}"`
     );
 
-    // 3. Eksekusi Engine AI Gemini 2.0 untuk menyusun balasan otomatis berdasarkan Katalog Produk Toko
+    const activeToken = (tenant as any)?.fonnteDeviceToken || DEFAULT_FALLBACK_TOKEN;
+    const lowerMessage = textMessage.toLowerCase();
+
+    // 2. TES SPESIAL: Jika pembeli meminta NOTA di chat WA (contoh: "minta nota", "nota", "bon")
+    if (
+      lowerMessage.includes("nota") ||
+      lowerMessage.includes("bon") ||
+      lowerMessage.includes("bil") ||
+      lowerMessage.includes("minta nota")
+    ) {
+      const replyNotaText = "Halo Kak! 📄 Berikut kami lampirkan Foto Nota Pembelian Arkhan Broiler. Terima kasih telah memesan di toko kami!";
+      const notaImageUrl = "https://balas-app.vercel.app/nota-sample.jpg";
+
+      console.log(`[TES NOTA GAMBAR] Mengirim foto nota ke ${targetPhone} via Fonnte...`);
+      await sendWAServiceMessage(targetPhone, replyNotaText, activeToken, notaImageUrl).catch(() => {});
+
+      return NextResponse.json({
+        status: "success",
+        type: "nota_image_test",
+        customerPhone,
+        targetPhone,
+        notaImageUrl,
+        replyNotaText,
+      });
+    }
+
+    // 3. Eksekusi Engine AI Gemini 2.0 untuk pesan umum lainnya
     const aiResult = await executeAIChatLogic(tenant.id, customerPhone, textMessage).catch((aiErr) => {
       console.error("AI Logic Error:", aiErr);
       return { reply: "Halo! Terima kasih telah menghubungi kami. Pesan Anda sudah diterima toko.", usingApiKey: false };
     });
 
     const replyText = aiResult.reply || "Maaf, pesan Anda sudah diterima toko.";
-    const activeToken = DEFAULT_FALLBACK_TOKEN;
 
     // 4. Kirim balasan resmi AI Gemini via Fonnte API
     await sendWAServiceMessage(targetPhone, replyText, activeToken).catch(() => {});

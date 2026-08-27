@@ -11,12 +11,25 @@ export interface WASessionState {
 const FONNTE_TOKEN_DEFAULT = "aXMG3WitNwPrRipyjsUD";
 
 export async function getTenantFonnteToken(tenantId?: string | null): Promise<string> {
+  if (!tenantId) {
+    return process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+  }
+
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+    if (tenant && (tenant as any).fonnteDeviceToken) {
+      return (tenant as any).fonnteDeviceToken;
+    }
+  } catch (e) {}
+
   return process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
 }
 
 export async function getWASessionState(tenantId?: string | null): Promise<WASessionState> {
   try {
-    const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    const fonnteToken = await getTenantFonnteToken(tenantId);
     const res = await fetch("https://api.fonnte.com/device", {
       method: "POST",
       headers: { Authorization: fonnteToken },
@@ -31,6 +44,12 @@ export async function getWASessionState(tenantId?: string | null): Promise<WASes
           data.device_status === "CONNECT")
       ) {
         const phone = data.device || "0895375488444";
+        if (tenantId) {
+          await prisma.tenant.update({
+            where: { id: tenantId },
+            data: { waStatus: "CONNECTED", waPhoneNumber: phone } as any,
+          }).catch(() => {});
+        }
         return {
           status: "CONNECTED",
           qrCodeUrl: null,
@@ -58,7 +77,7 @@ export async function getWASessionState(tenantId?: string | null): Promise<WASes
 
 export async function initWASession(tenantId?: string | null): Promise<WASessionState> {
   try {
-    const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    const fonnteToken = await getTenantFonnteToken(tenantId);
 
     await fetch("https://api.fonnte.com/connect", {
       method: "POST",
@@ -121,7 +140,7 @@ export async function initWASession(tenantId?: string | null): Promise<WASession
 
 export async function disconnectWASession(tenantId?: string | null): Promise<WASessionState> {
   try {
-    const fonnteToken = process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    const fonnteToken = await getTenantFonnteToken(tenantId);
     await fetch("https://api.fonnte.com/disconnect", {
       method: "POST",
       headers: { Authorization: fonnteToken },
@@ -148,24 +167,31 @@ export async function disconnectWASession(tenantId?: string | null): Promise<WAS
 export async function sendWAServiceMessage(
   targetPhone: string,
   message: string,
-  token?: string
+  token?: string,
+  imageUrl?: string
 ): Promise<boolean> {
   try {
     const fonnteToken = token || process.env.FONNTE_TOKEN || FONNTE_TOKEN_DEFAULT;
+    const bodyParams: any = {
+      target: targetPhone,
+      message: message,
+    };
+
+    if (imageUrl) {
+      bodyParams.url = imageUrl;
+    }
+
     const res = await fetch("https://api.fonnte.com/send", {
       method: "POST",
       headers: {
         Authorization: fonnteToken,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({
-        target: targetPhone,
-        message: message,
-      }),
+      body: new URLSearchParams(bodyParams),
     });
 
     const data = await res.json().catch(() => ({ status: false }));
-    console.log(`[Fonnte Send API] Kirim ke ${targetPhone}:`, data);
+    console.log(`[Fonnte Send API] Kirim ke ${targetPhone} (Image: ${imageUrl || "None"}):`, data);
     return data.status === true;
   } catch (error) {
     console.error("sendWAServiceMessage Error:", error);
