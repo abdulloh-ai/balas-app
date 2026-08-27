@@ -179,6 +179,7 @@ export async function sendWAServiceMessage(
 
     if (imageUrl) {
       bodyParams.url = imageUrl;
+      bodyParams.filename = "nota-sample.jpg";
     }
 
     const res = await fetch("https://api.fonnte.com/send", {
