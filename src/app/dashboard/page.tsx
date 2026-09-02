@@ -118,6 +118,7 @@ export default function BusinessOwnerDashboard() {
   const [usingApiKey, setUsingApiKey] = useState<boolean | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
+  const [mobileChatView, setMobileChatView] = useState<"list" | "detail">("list");
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [productLoading, setProductLoading] = useState(false);
@@ -297,9 +298,6 @@ export default function BusinessOwnerDashboard() {
     if (activeTab === "eskalasi") fetchEscalationsData();
     if (activeTab === "wa") {
       fetchWAStatus();
-      if (waState.status === "DISCONNECTED") {
-        handleConnectWA();
-      }
     }
   }, [activeTab, reportPeriod]);
 
@@ -1260,7 +1258,7 @@ export default function BusinessOwnerDashboard() {
         {activeTab === "chat" && (
           <div className="bg-white rounded-3xl border border-[#E2E0D8] shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[550px]">
             {/* SISI KIRI: DAFTAR KONTAK PELANGGAN (4 Cols) */}
-            <div className="lg:col-span-4 border-r border-[#E2E0D8] bg-[#F5F3EE]/40 flex flex-col">
+            <div className={`${mobileChatView === "list" ? "block" : "hidden"} lg:block lg:col-span-4 border-r border-[#E2E0D8] bg-[#F5F3EE]/40 flex flex-col`}>
               <div className="p-4 border-b border-[#E2E0D8] bg-white flex justify-between items-center">
                 <div>
                   <h3 className="font-extrabold text-sm text-[#1F2A24]">Daftar Chat Pelanggan</h3>
@@ -1275,7 +1273,10 @@ export default function BusinessOwnerDashboard() {
                   return (
                     <div
                       key={cust.phone}
-                      onClick={() => setSelectedCustomerPhone(cust.phone)}
+                      onClick={() => {
+                        setSelectedCustomerPhone(cust.phone);
+                        setMobileChatView("detail");
+                      }}
                       className={`p-3.5 cursor-pointer transition-all flex items-start gap-3 ${
                         isSelected
                           ? "bg-[#2F6A55]/10 border-l-4 border-[#2F6A55]"
@@ -1328,10 +1329,16 @@ export default function BusinessOwnerDashboard() {
             </div>
 
             {/* SISI KANAN: AREA ISI PERCAKAPAN LENGKAP (8 Cols) */}
-            <div className="lg:col-span-8 flex flex-col justify-between bg-[#EFEAE2]">
+            <div className={`${mobileChatView === "detail" ? "flex" : "hidden"} lg:flex lg:col-span-8 flex-col justify-between bg-[#EFEAE2]`}>
               {/* Header Obrolan */}
               <div className="bg-[#2F6A55] text-white p-3.5 sm:p-4 flex items-center justify-between shadow-xs">
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setMobileChatView("list")}
+                    className="lg:hidden px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-white font-bold text-xs flex items-center gap-1 transition"
+                  >
+                    ← Kembali
+                  </button>
                   <div className="w-9 h-9 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold text-base">
                     📱
                   </div>
